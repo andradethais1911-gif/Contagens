@@ -10,8 +10,22 @@ function injectFonts() {
 }
 
 const DB = {
-  async get(k) { try { const r = await window.storage.get(k, true); return r ? JSON.parse(r.value) : null; } catch { return null; } },
-  async set(k, v) { try { await window.storage.set(k, JSON.stringify(v), true); } catch {} }
+  async get(k) {
+    try {
+      const r = await fetch(`/api/storage?key=${encodeURIComponent(k)}`);
+      const j = await r.json();
+      return j.value ? JSON.parse(j.value) : null;
+    } catch { return null; }
+  },
+  async set(k, v) {
+    try {
+      await fetch("/api/storage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: k, value: JSON.stringify(v) })
+      });
+    } catch {}
+  }
 };
 
 const DEFAULT_PASS = "Teresa";
@@ -109,7 +123,7 @@ function ReportModal({counting,items,onClose}) {
     ctx.fillText(`Data: ${fmtDate(counting.date)}`,32,90);
     ctx.fillText(`Gerado: ${new Date().toLocaleString("pt-BR")}`,32,110);
     let y=hH;
-    const cols=[{l:"Insumo",x:32},{l:"Unidade",x:220},{l:"Qtd Contada",x:310},{l:"Mín",x:420},{l:"Máx",x:490},{l:"Status",x:565},{l:"Compra Necessária",x:680}];
+    const cols=[{l:"Insumo",x:32},{l:"Unidade",x:220},{l:"Qtd Contabilizada",x:310},{l:"Mínimo",x:450},{l:"Máximo",x:520},{l:"Status",x:595},{l:"Compra Necessária",x:710}];
     ctx.fillStyle="#0a1e3c";ctx.fillRect(0,y,W,thH);
     ctx.font="bold 11px Arial";ctx.fillStyle="#bfdbfe";
     cols.forEach(c=>ctx.fillText(c.l,c.x,y+23));
@@ -126,20 +140,19 @@ function ReportModal({counting,items,onClose}) {
       ctx.fillText(it.unit||"—",220,y+24);
       ctx.font="bold 13px Arial";ctx.fillStyle="#1d4ed8";ctx.fillText(String(ci.counted??0),310,y+24);
       ctx.font="12px Arial";ctx.fillStyle="#475569";
-      ctx.fillText(String(it.min||"—"),420,y+24);
-      ctx.fillText(String(it.max||"—"),490,y+24);
+      ctx.fillText(String(it.min||"—"),450,y+24);
+      ctx.fillText(String(it.max||"—"),520,y+24);
       if(st){
         const bg=st.color===T.red?"#fee2e2":st.color===T.purple?"#ede9fe":"#dcfce7";
         const tc=st.color===T.red?"#b91c1c":st.color===T.purple?"#6d28d9":"#15803d";
-        ctx.fillStyle=bg;ctx.beginPath();ctx.roundRect(565,y+8,108,22,5);ctx.fill();
-        ctx.font="bold 10px Arial";ctx.fillStyle=tc;ctx.fillText(st.label.slice(0,14),571,y+23);
+        ctx.fillStyle=bg;ctx.beginPath();ctx.roundRect(595,y+8,108,22,5);ctx.fill();
+        ctx.font="bold 10px Arial";ctx.fillStyle=tc;ctx.fillText(st.label.slice(0,14),601,y+23);
       }
       if(need>0){
         ctx.font="bold 12px Arial";ctx.fillStyle="#d97706";
-        ctx.fillText(`+${need} ${it.unit||""}`,680,y+24);
+        ctx.fillText(`+${need} ${it.unit||""}`,710,y+24);
       } else {
-        ctx.font="12px Arial";ctx.fillStyle="#94a3b8";
-        ctx.fillText("—",680,y+24);
+        ctx.font="12px Arial";ctx.fillStyle="#94a3b8";ctx.fillText("—",710,y+24);
       }
       y+=rowH;
     });
@@ -180,12 +193,10 @@ function sendWA(phone,counting,items) {
     const it=items.find(i=>i.id===ci.id)||ci;
     const min=it.min?` | Mínimo: ${it.min}`:"";
     const max=it.max?` | Máximo: ${it.max}`:"";
-    const unit=it.unit?` ${it.unit}`:"";
-    return `  • *${ci.name}*\n    Contado: ${ci.counted??0}${unit}${min}${max}`;
+    return `  • *${ci.name}*\n    Contabilizado: ${ci.counted??0} ${it.unit||""}${min}${max}`;
   }).join("\n");
   const ab=(counting.items||[]).filter(ci=>{const it=items.find(i=>i.id===ci.id)||ci;return it.min&&ci.counted<=it.min;});
-  const alertas=ab.length?`\n\n⚠️ *Insumos abaixo do mínimo:*\n${ab.map(ci=>{const it=items.find(i=>i.id===ci.id)||ci;return `  • ${ci.name}: *${ci.counted??0}* (mínimo: ${it.min})`;}).join("\n")}`:"";
-  // Necessidade de compra
+  const alertas=ab.length?`\n\n⚠️ *Insumos abaixo do mínimo:*\n${ab.map(ci=>{const it=items.find(i=>i.id===ci.id)||ci;return`  • ${ci.name}: *${ci.counted??0}* (mínimo: ${it.min})`;}).join("\n")}`:"";
   const compras=(counting.items||[]).filter(ci=>{const it=items.find(i=>i.id===ci.id)||ci;return it.min&&ci.counted<=it.min;}).map(ci=>{
     const it=items.find(i=>i.id===ci.id)||ci;
     const need=it.max?Math.max(it.max-ci.counted,0):Math.max(it.min-ci.counted+it.min,0);
@@ -292,7 +303,6 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
   const [inputVal,setInputVal]=useState("");
   const [saved,setSaved]=useState(null);
   const [showReport,setShowReport]=useState(false);
-
   const upcoming=(scheduledDates||[]).filter(sd=>!sd.done&&daysUntil(sd.date)>=0&&daysUntil(sd.date)<=3).sort((a,b)=>a.date.localeCompare(b.date));
   const nextSched=upcoming[0]||null;
   const total=items.length;
@@ -301,27 +311,18 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
   const doneCount=items.filter(i=>confirmed[i.id]).length;
   const allDone=doneCount===total&&total>0;
   const autoLabel=`CONTAGEM ${countings.length+1}`;
-
   const doConfirm=()=>{const n=Number(inputVal);if(inputVal===""||isNaN(n)||n<0)return;setCounts(p=>({...p,[item.id]:n}));setConfirmed(p=>({...p,[item.id]:true}));};
   const doNext=()=>{setInputVal("");if(current<total-1)setCurrent(c=>c+1);};
   const doEdit=()=>{setConfirmed(p=>({...p,[item.id]:false}));setInputVal(String(counts[item.id]??""));};
   const goTo=idx=>{setCurrent(idx);setInputVal(confirmed[items[idx].id]?String(counts[items[idx].id]??""):"");};
-  const numpad=k=>{
-    if(isConf)return;
-    if(k==="⌫")setInputVal(p=>p.slice(0,-1));
-    else if(k==="✓")doConfirm();
-    else setInputVal(p=>(p===""||p==="0")?String(k):p.length>6?p:p+String(k));
-  };
+  const numpad=k=>{if(isConf)return;if(k==="⌫")setInputVal(p=>p.slice(0,-1));else if(k==="✓")doConfirm();else setInputVal(p=>(p===""||p==="0")?String(k):p.length>6?p:p+String(k));};
   const doSend=()=>{
     const label=nextSched?.label||autoLabel;
     const result=items.map(i=>({...i,counted:counts[i.id]??0}));
     const counting={id:Date.now(),label,date:todayStr(),items:result};
-    onSubmit(counting,nextSched);
-    setSaved(counting);
-    setPhase("done");
+    onSubmit(counting,nextSched);setSaved(counting);setPhase("done");
     if(whatsapp)setTimeout(()=>sendWA(whatsapp,counting,items),500);
   };
-
   if(!items.length) return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:T.fontBase,padding:24}}>
       <div style={{fontSize:48}}>⚠️</div>
@@ -329,7 +330,6 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
       <button onClick={onBack} style={S.btn(T.accent)}>← Voltar</button>
     </div>
   );
-
   if(phase==="start") return (
     <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:T.fontBase,display:"flex",flexDirection:"column"}}>
       <div style={{background:`linear-gradient(135deg,${T.accentDim}33,${T.bg})`,padding:"22px 18px 18px",borderBottom:`1px solid ${T.border}`}}>
@@ -353,7 +353,6 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
       </div>
     </div>
   );
-
   if(phase==="counting") {
     const pct=(doneCount/total)*100;
     const cv=counts[item.id];
@@ -413,7 +412,6 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
       </div>
     );
   }
-
   return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:0,fontFamily:T.fontBase,padding:24}}>
       {showReport&&saved&&<ReportModal counting={saved} items={items} onClose={()=>setShowReport(false)}/>}
@@ -437,6 +435,7 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
 function ManagerPanel({data,onBack}) {
   const {items,countings,scheduledDates,appPass,passHint,whatsapp,setItems,setCountings,setScheduledDates,setAppPass,setPassHint,setWhatsapp}=data;
   const TABS=["📊 Dashboard","📦 Insumos","📋 Contagens","🛒 Compras","⚙️ Config"];
+  const [tab,setTab]=useState(0);
   return (
     <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:T.fontBase,paddingBottom:70}}>
       <div style={{background:`linear-gradient(135deg,${T.warmDim}22,${T.bg})`,padding:"20px 18px 0",borderBottom:`1px solid ${T.border}`}}>
@@ -452,7 +451,6 @@ function ManagerPanel({data,onBack}) {
         {tab===2&&<CountTab items={items} countings={countings} setCountings={setCountings} scheduledDates={scheduledDates} setScheduledDates={setScheduledDates}/>}
         {tab===3&&<BuyTab items={items} countings={countings}/>}
         {tab===4&&<CfgTab appPass={appPass} setAppPass={setAppPass} passHint={passHint} setPassHint={setPassHint} whatsapp={whatsapp} setWhatsapp={setWhatsapp}/>}
-
       </div>
     </div>
   );
@@ -500,11 +498,11 @@ function DashTab({items,countings}) {
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
             <div style={{background:T.red+"10",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
               <div style={{fontSize:T.fs24,fontWeight:700,color:T.red,fontFamily:T.fontMono}}>{abMin}</div>
-              <div style={{fontSize:T.fs11,color:T.red,fontWeight:600,marginTop:2}}>Abaixo do Mínimo</div>
+              <div style={{fontSize:T.fs11,color:T.red,fontWeight:600,marginTop:2}}>Itens Abaixo do Mínimo</div>
             </div>
             <div style={{background:T.purple+"10",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
               <div style={{fontSize:T.fs24,fontWeight:700,color:T.purple,fontFamily:T.fontMono}}>{acMax}</div>
-              <div style={{fontSize:T.fs11,color:T.purple,fontWeight:600,marginTop:2}}>Acima do Máximo</div>
+              <div style={{fontSize:T.fs11,color:T.purple,fontWeight:600,marginTop:2}}>Itens Acima do Máximo</div>
             </div>
           </div>
           {items.filter(i=>i.min&&(lc[i.id]??0)<=i.min).slice(0,5).map(i=>(
@@ -558,13 +556,13 @@ function ItemsTab({items,setItems,countings}) {
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>{UNITS.map(u=><button key={u} onClick={()=>setForm(p=>({...p,unit:u}))} style={{background:form.unit===u?T.accent:T.surface,border:`1px solid ${form.unit===u?T.accent:T.border}`,borderRadius:8,padding:"6px 12px",color:form.unit===u?"#fff":T.textSub,fontWeight:600,fontSize:T.fs12,cursor:"pointer",fontFamily:T.fontBase}}>{u}</button>)}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
             <div><div style={S.label}>Valor (R$)</div><input type="number" placeholder="0.00" value={form.value} onChange={e=>setForm(p=>({...p,value:e.target.value}))} style={S.input()}/></div>
-            <div><div style={S.label}>Qtd adquirida</div><input type="number" placeholder="0" value={form.acquiredQty} onChange={e=>setForm(p=>({...p,acquiredQty:e.target.value}))} style={S.input()}/></div>
+            <div><div style={S.label}>Quantidade adquirida</div><input type="number" placeholder="0" value={form.acquiredQty} onChange={e=>setForm(p=>({...p,acquiredQty:e.target.value}))} style={S.input()}/></div>
           </div>
           <div style={S.label}>Data de aquisição</div>
           <input type="date" value={form.acquiredDate} onChange={e=>setForm(p=>({...p,acquiredDate:e.target.value}))} style={{...S.input({marginBottom:12})}}/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-            <div><div style={S.label}>Qtd mínima</div><input type="number" placeholder="Mínimo" value={form.min} onChange={e=>setForm(p=>({...p,min:e.target.value}))} style={S.input()}/></div>
-            <div><div style={S.label}>Qtd máxima</div><input type="number" placeholder="Máximo" value={form.max} onChange={e=>setForm(p=>({...p,max:e.target.value}))} style={S.input()}/></div>
+            <div><div style={S.label}>Quantidade mínima</div><input type="number" placeholder="Mínimo" value={form.min} onChange={e=>setForm(p=>({...p,min:e.target.value}))} style={S.input()}/></div>
+            <div><div style={S.label}>Quantidade máxima</div><input type="number" placeholder="Máximo" value={form.max} onChange={e=>setForm(p=>({...p,max:e.target.value}))} style={S.input()}/></div>
           </div>
           <div style={S.label}>Anexo</div>
           <button onClick={()=>fileRef.current.click()} style={{...S.btn(T.purple,true,true),marginBottom:10,justifyContent:"flex-start",gap:8}}>📎 {form.attachmentName||"Selecionar arquivo"}</button>
@@ -593,7 +591,7 @@ function ItemsTab({items,setItems,countings}) {
                 {counted!==undefined&&<div style={{fontSize:T.fs12,marginBottom:8}}>Quantidade na última contagem: <b style={{color:st?.color||T.text,fontFamily:T.fontMono}}>{counted}</b></div>}
                 <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:T.fs12,color:T.textMuted}}>
                   {it.value>0&&<span>Valor unitário: <b style={{color:T.yellow}}>{fmtCur(it.value)}</b></span>}
-                  {it.acquiredQty>0&&<span>Qtd adquirida: <b style={{color:T.text}}>{it.acquiredQty}</b></span>}
+                  {it.acquiredQty>0&&<span>Quantidade adquirida: <b style={{color:T.text}}>{it.acquiredQty}</b></span>}
                   {it.acquiredDate&&<span>Aquisição: <b style={{color:T.text}}>{fmtDate(it.acquiredDate)}</b></span>}
                 </div>
                 {(it.min||it.max)&&<div style={{fontSize:T.fs12,color:T.textMuted,marginTop:4}}>{it.min?`Mínimo: ${it.min}`:""}{it.min&&it.max?" · ":""}{it.max?`Máximo: ${it.max}`:""}</div>}
@@ -625,7 +623,6 @@ function CountTab({items,countings,setCountings,scheduledDates,setScheduledDates
   const SUBS=[["history","📋 Histórico"],["schedule","🗓 Agendamentos"],["evolution","📈 Evolução"]];
   const sorted=[...countings].sort((a,b)=>b.date?.localeCompare(a.date));
   const sortedSch=[...scheduledDates].sort((a,b)=>a.date.localeCompare(b.date));
-
   if(sel) return (
     <div>
       {showReport&&repC&&<ReportModal counting={repC} items={items} onClose={()=>setShowReport(false)}/>}
@@ -640,14 +637,13 @@ function CountTab({items,countings,setCountings,scheduledDates,setScheduledDates
         <div key={ci.id} style={{...S.card({marginBottom:8}),display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div><div style={{fontWeight:600,fontSize:T.fs13}}>{ci.name||it.name}</div><div style={{fontSize:T.fs12,color:T.accent}}>{it.unit}</div></div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{textAlign:"right"}}><div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:1}}>Quantidade contada</div><span style={{...S.mono,fontSize:T.fs20,fontWeight:700,color:T.accent}}>{ci.counted}</span></div>
+            <div style={{textAlign:"right"}}><div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:1}}>Quantidade contabilizada</div><span style={{...S.mono,fontSize:T.fs20,fontWeight:700,color:T.accent}}>{ci.counted}</span></div>
             {st&&<StatusBadge item={it} counted={ci.counted}/>}
           </div>
         </div>
       );})}
     </div>
   );
-
   return (
     <div>
       {confirm&&<ConfirmModal message={confirm.message} onConfirm={confirm.onConfirm} onCancel={()=>setConfirm(null)}/>}
@@ -671,7 +667,7 @@ function CountTab({items,countings,setCountings,scheduledDates,setScheduledDates
                     <div key={ci.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:`1px solid ${T.border}`}}>
                       <span style={{fontSize:T.fs12,color:T.text}}>{ci.name}</span>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:T.fs10,color:T.textMuted}}>qtd contada</div>
+                        <div style={{fontSize:T.fs10,color:T.textMuted}}>qtd contabilizada</div>
                         <span style={{...S.mono,fontSize:T.fs12,fontWeight:600,color:T.accent}}>{ci.counted} <span style={{fontSize:T.fs10,color:T.textMuted}}>{ci.unit||""}</span></span>
                       </div>
                     </div>
@@ -750,7 +746,7 @@ function BuyTab({items,countings}) {
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                     <div style={{background:T.surface,borderRadius:9,padding:"9px 10px"}}><div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Atual</div><div style={{fontFamily:T.fontMono,fontSize:T.fs16,fontWeight:700,color:T.red}}>{it.cur}</div></div>
                     <div style={{background:T.surface,borderRadius:9,padding:"9px 10px"}}><div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Necessário</div><div style={{fontFamily:T.fontMono,fontSize:T.fs16,fontWeight:700,color:T.yellow}}>+{it.need}</div></div>
-                    <div style={{background:T.surface,borderRadius:9,padding:"9px 10px"}}><div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Valor unit.</div><div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:T.textSub}}>{fmtCur(it.value)}</div></div>
+                    <div style={{background:T.surface,borderRadius:9,padding:"9px 10px"}}><div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Valor unitário</div><div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:T.textSub}}>{fmtCur(it.value)}</div></div>
                   </div>
                   <div style={{marginTop:8,display:"flex",justifyContent:"space-between",alignItems:"center",background:T.green+"0a",border:`1px solid ${T.green}20`,borderRadius:9,padding:"7px 10px"}}>
                     <div style={{fontSize:T.fs11,color:T.textMuted,textTransform:"uppercase",fontWeight:600}}>Valor estimado</div>
@@ -833,8 +829,8 @@ function EvoTab({items,countings}) {
             </div>
             <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:12,fontSize:T.fs10,color:T.textMuted}}>
               <span>🟧 Inicial</span><span>🟩 Maior</span><span>🟥 Menor</span>
-              {minR&&<span style={{color:T.red}}>│ mín ({minR})</span>}
-              {maxR&&<span style={{color:T.purple}}>│ máx ({maxR})</span>}
+              {minR&&<span style={{color:T.red}}>│ mínimo ({minR})</span>}
+              {maxR&&<span style={{color:T.purple}}>│ máximo ({maxR})</span>}
             </div>
           </div>
           <div style={S.card()}>
@@ -905,17 +901,13 @@ function CfgTab({appPass,setAppPass,passHint,setPassHint,whatsapp,setWhatsapp}) 
 export default function App() {
   const data = useAppData();
   const [screen,setScreen] = useState("home");
-
   if(data.loading) return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.fontBase}}>
       <div style={{color:T.textMuted,fontFamily:T.fontMono,fontSize:T.fs13}}>Carregando…</div>
     </div>
   );
-
   if(screen==="home") return <HomeScreen onManager={()=>setScreen("managerLogin")} onCounter={()=>setScreen("counter")} scheduledDates={data.scheduledDates}/>;
-
   if(screen==="managerLogin") return <ManagerLogin appPass={data.appPass} passHint={data.passHint} onLogin={()=>{if(data.whatsapp)setScreen("manager");else setScreen("waSetup");}} onBack={()=>setScreen("home")}/>;
-
   if(screen==="waSetup") return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:T.fontBase}}>
       <div style={{width:"100%",maxWidth:360}}>
@@ -927,16 +919,14 @@ export default function App() {
         <div style={S.card({padding:"20px"})}>
           <div style={S.label}>Número (DDI + DDD + número)</div>
           <input placeholder="Ex: 5586999436523" defaultValue={data.whatsapp||""} id="wp-input" style={{...S.input({marginBottom:6,...S.mono})}}/>
-          <div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:14}}>Ex: 55 + 86 + 999436523</div>
+          <div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:14}}>Exemplo: 55 + 86 + 999436523</div>
           <button onClick={()=>{const v=document.getElementById("wp-input").value;const n=normPhone(v);if(n.length>=10)data.setWhatsapp(n);setScreen("manager");}} style={S.btn(T.green,true)}>💾 Salvar e Entrar</button>
           <button onClick={()=>setScreen("manager")} style={{...S.btn(T.surface,true),marginTop:8,border:`1px solid ${T.border}`,color:T.textSub}}>Pular por agora</button>
         </div>
       </div>
     </div>
   );
-
   if(screen==="manager") return <ManagerPanel data={data} onBack={()=>setScreen("home")}/>;
-
   if(screen==="counter") {
     const handleSubmit=(counting,sd)=>{
       data.setCountings(prev=>[...prev,counting]);
