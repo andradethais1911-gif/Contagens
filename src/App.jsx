@@ -191,6 +191,16 @@ function ReportModal({counting,items,onClose}) {
   );
 }
 
+function openWA(url) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 function sendWA(phone, counting, items) {
   const lines=(counting.items||[]).map(ci=>{
     const it=items.find(i=>i.id===ci.id)||ci;
@@ -207,14 +217,12 @@ function sendWA(phone, counting, items) {
   });
   const comprasMsg=compras.length?`\n\n🛒 *Necessidade de Compra:*\n${compras.join("\n")}`:"";
   const msg=`Olá, Teresa! 😁🌟\n\nSegue o relatório da *${counting.label}* referente a ${fmtDate(counting.date)}, com as quantidades contabilizadas e a necessidade de compra conforme o levantamento realizado.\n\n📋 *Quantidades contabilizadas:*\n${lines}${alertas}${comprasMsg}\n\n_Sistema de Gestão de Contagens_`;
-  const n = normPhone(phone);
-  window.open(`https://wa.me/${n}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
+  openWA(`https://wa.me/${normPhone(phone)}?text=${encodeURIComponent(msg)}`);
 }
 
 function sendWABlocked(phone, reason, nextFuture) {
   const msg=`Olá, Teresa! 😊\n\nEstou tentando realizar a contagem de estoque${nextFuture?` referente a *"${nextFuture.label}"* (prevista para ${fmtDate(nextFuture.date)})`:""},  mas o sistema não está permitindo o registro.\n\n⚠️ *Motivo:* ${reason}\n\nPor favor, verifique o agendamento ou libere o acesso para que eu possa realizar a contagem.\n\n_Sistema de Gestão de Contagens_`;
-  const n = normPhone(phone);
-  window.open(`https://wa.me/${n}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
+  openWA(`https://wa.me/${normPhone(phone)}?text=${encodeURIComponent(msg)}`);
 }
 
 function useAppData() {
@@ -525,7 +533,7 @@ function ManagerPanel({data,onBack}) {
         </div>
       </div>
       <div style={{padding:"18px 16px"}}>
-        {tab===0&&<DashTab items={items} countings={countings} scheduledDates={scheduledDates}/>}
+        {tab===0&&<DashTab items={items} countings={countings} scheduledDates={scheduledDates} onNavigate={setTab}/>}
         {tab===1&&<ItemsTab items={items} setItems={setItems} countings={countings}/>}
         {tab===2&&<CountTab items={items} countings={countings} setCountings={setCountings} setItems={setItems} scheduledDates={scheduledDates} setScheduledDates={setScheduledDates}/>}
         {tab===3&&<BuyTab items={items} setItems={setItems} countings={countings} purchases={purchases} setPurchases={setPurchases}/>}
@@ -536,140 +544,114 @@ function ManagerPanel({data,onBack}) {
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
-function DashTab({items,countings,scheduledDates}) {
-  const pendingScheduled = (scheduledDates||[]).filter(sd=>!sd.done).sort((a,b)=>a.date.localeCompare(b.date));
-  const nextSched = pendingScheduled[0]||null;
-  const dtn = nextSched ? daysUntil(nextSched.date) : null;
-  const schedColor = dtn===null?T.textSub:dtn<0?T.red:dtn===0?T.yellow:dtn<=3?T.yellow:T.green;
-  const schedLabel = dtn===null?"—":dtn<0?`${Math.abs(dtn)} dia${Math.abs(dtn)!==1?"s":""} em atraso`:dtn===0?"HOJE":`em ${dtn} dia${dtn!==1?"s":""}`;
-
-  const lastC=countings.length?[...countings].sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0]:null;
+function DashTab({items,countings,scheduledDates,onNavigate}) {
+  const sortedCountings=[...countings].sort((a,b)=>Number(b.id||0)-Number(a.id||0));
+  const lastC=sortedCountings[0]||null;
   const lc={};if(lastC)(lastC.items||[]).forEach(ci=>{lc[ci.id]=ci.counted;});
+
   const vA=items.reduce((s,i)=>s+(Number(i.value||0)*getTotalAcquired(i)),0);
   const vC=items.reduce((s,i)=>s+(Number(i.value||0)*(lc[i.id]??0)),0);
+  const ex=Object.keys(lc).length;
+  const dQ=ex-items.length;
+  const dV=vC-vA;
 
-  // Pending purchases value = sum of (need * value) for items below max
-  const vPending=items.reduce((s,i)=>{
-    const cur=lc[i.id]??0;
-    let need=0;
-    if(i.max&&cur<i.max) need=i.max-cur;
-    else if(!i.max&&i.min&&cur<i.min) need=i.min-cur+Number(i.min||0);
-    return s+(Number(i.value||0)*need);
-  },0);
+  // Colors driven by comparison logic
+  const colorContabilizados = !lastC ? T.textSub : ex===items.length ? T.green : ex<items.length ? T.red : T.green;
+  const colorDiffQtd = !lastC ? T.textSub : dQ>0 ? T.green : dQ<0 ? T.red : T.textSub;
+  const colorVContabilizado = !lastC ? T.textSub : vC===0&&vA===0 ? T.textSub : vC<vA ? T.red : vC===vA ? T.green : T.green;
+  const colorDiffVal = !lastC ? T.textSub : dV>0 ? T.green : dV<0 ? T.red : T.textSub;
 
   const abMin=items.filter(i=>i.min&&(lc[i.id]??0)<i.min).length;
   const acMax=items.filter(i=>i.max&&(lc[i.id]??0)>i.max).length;
   const inRange=items.filter(i=>{const c=lc[i.id];if(c===undefined)return false;if(i.min&&i.max)return c>=i.min&&c<=i.max;if(i.min)return c>=i.min;if(i.max)return c<=i.max;return true;}).length;
 
-  const ex=Object.keys(lc).length;
-  const dQ=ex-items.length; const dV=vC-vA;
-  const vc=vC===0&&vA===0?T.textSub:vC<vA?T.red:vC===vA?T.green:T.accent;
+  const allSch=[...(scheduledDates||[])].sort((a,b)=>a.date.localeCompare(b.date));
+  const schPending=allSch.filter(s=>!s.done&&s.date>=todayStr());
+  const schOverdue=allSch.filter(s=>!s.done&&s.date<todayStr());
+  const countingsValidated=sortedCountings.filter(c=>c.validated).length;
+  const countingsPendingVal=sortedCountings.filter(c=>!c.validated).length;
 
-  const Stat=({icon,label,value,sub,color,small=false})=>(
-    <div style={S.card({padding:"14px"})}>
-      <div style={{fontSize:T.fs18,marginBottom:4}}>{icon}</div>
-      <div style={{fontFamily:T.fontMono,fontSize:small?T.fs13:T.fs20,fontWeight:700,color:color||T.accent,lineHeight:1.2}}>{value}</div>
-      <div style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600,marginTop:3,textTransform:"uppercase",lineHeight:1.4}}>{label}</div>
-      {sub&&<div style={{fontSize:T.fs10,color:T.textMuted,marginTop:2}}>{sub}</div>}
+  const Card=({icon,value,label,sub,color,onClick=null})=>(
+    <div onClick={onClick||undefined} style={{
+      background:T.card,
+      border:`1px solid ${color+"44"}`,
+      borderRadius:12,
+      padding:"11px 9px",
+      cursor:onClick?"pointer":"default",
+      display:"flex",
+      flexDirection:"column",
+      gap:3
+    }}>
+      <div style={{fontSize:14,lineHeight:1}}>{icon}</div>
+      <div style={{fontFamily:T.fontMono,fontSize:T.fs16,fontWeight:700,color,lineHeight:1.1,marginTop:2}}>{value}</div>
+      <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",lineHeight:1.35,letterSpacing:.3,flex:1}}>{label}</div>
+      {sub&&<div style={{fontSize:9,color:T.textMuted,lineHeight:1.3}}>{sub}</div>}
+      <div style={{marginTop:4,background:color+"22",borderRadius:4,padding:"2px 6px",alignSelf:"flex-start"}}>
+        <span style={{fontSize:9,color,fontWeight:800,letterSpacing:.5}}>VER →</span>
+      </div>
     </div>
   );
 
   return (
     <div style={{marginTop:4}}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-        <Stat icon="📦" label="Insumos Cadastrados" value={items.length} color={T.accent}/>
-        <Stat icon="🧮" label="Insumos Contabilizados" value={lastC?ex:"—"} sub={lastC?lastC.label:"Sem contagem"} color={T.green}/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-        <Stat icon="💳" label="Valor Total Adquirido" value={fmtCur(vA)} color={T.warm} small/>
-        <Stat icon="💰" label="Valor Total Contabilizado" value={fmtCur(vC)} sub={lastC?lastC.label:"Sem contagem"} color={vc} small/>
-      </div>
-      {lastC&&vPending>0&&(
-        <div style={{marginBottom:10}}>
-          <Stat icon="🛒" label="Valor Total Pendente de Compra" value={fmtCur(vPending)} sub="Baseado na programação de compras" color={T.yellow} small/>
-        </div>
-      )}
-      <div style={{marginBottom:10}}>
-        <div style={S.card({padding:"14px"})}>
-          <div style={{fontSize:T.fs18,marginBottom:4}}>⏰</div>
-          <div style={{fontFamily:T.fontMono,fontSize:T.fs20,fontWeight:700,color:schedColor,lineHeight:1.2}}>{schedLabel}</div>
-          <div style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600,marginTop:3,textTransform:"uppercase"}}>Próxima Contagem Agendada</div>
-          {nextSched&&<div style={{fontSize:T.fs10,color:T.textMuted,marginTop:2}}>{nextSched.label} · {fmtDate(nextSched.date)}</div>}
-          {!nextSched&&<div style={{fontSize:T.fs10,color:T.textMuted,marginTop:2}}>Nenhum agendamento pendente</div>}
-        </div>
+
+      {/* LINHA 1: Insumos Cadastrados | Insumos Contabilizados | Diferença em Quantidade */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+        <Card icon="📦" label="INSUMOS CADASTRADOS"     value={items.length}                        color={T.accent}             onClick={()=>onNavigate(1)}/>
+        <Card icon="🧮" label="INSUMOS CONTABILIZADOS"  value={lastC?ex:"—"}    sub={lastC?lastC.label:null} color={colorContabilizados}  onClick={()=>onNavigate(2)}/>
+        <Card icon="🔢" label="DIFERENÇA EM QUANTIDADE" value={lastC?`${dQ>0?"+":""}${dQ}`:"—"}    color={colorDiffQtd}          onClick={()=>onNavigate(1)}/>
       </div>
 
-      {/* Quantity alerts - 3 categories */}
-      {lastC&&(abMin>0||acMax>0||inRange>0)&&(
-        <div style={{...S.card({marginBottom:10,border:`1px solid ${T.border}`})}}>
-          <div style={{fontSize:T.fs12,fontWeight:700,color:T.text,marginBottom:10}}>📊 Status das Quantidades</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
-            <div style={{background:T.red+"10",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
-              <div style={{fontSize:T.fs20,fontWeight:700,color:T.red,fontFamily:T.fontMono}}>{abMin}</div>
-              <div style={{fontSize:T.fs10,color:T.red,fontWeight:600,marginTop:2,lineHeight:1.3}}>Abaixo do Mínimo</div>
-            </div>
-            <div style={{background:T.green+"10",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
-              <div style={{fontSize:T.fs20,fontWeight:700,color:T.green,fontFamily:T.fontMono}}>{inRange}</div>
-              <div style={{fontSize:T.fs10,color:T.green,fontWeight:600,marginTop:2,lineHeight:1.3}}>Dentro do Intervalo</div>
-            </div>
-            <div style={{background:T.purple+"10",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
-              <div style={{fontSize:T.fs20,fontWeight:700,color:T.purple,fontFamily:T.fontMono}}>{acMax}</div>
-              <div style={{fontSize:T.fs10,color:T.purple,fontWeight:600,marginTop:2,lineHeight:1.3}}>Acima do Máximo</div>
-            </div>
+      {/* LINHA 2: Valor Total Adquirido | Valor Total Contabilizado | Diferença em Valor */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+        <Card icon="💳" label="VALOR TOTAL ADQUIRIDO"      value={fmtCur(vA)}             color={T.warm}              onClick={()=>onNavigate(3)}/>
+        <Card icon="💰" label="VALOR TOTAL CONTABILIZADO"  value={fmtCur(vC)} sub={lastC?lastC.label:null} color={colorVContabilizado} onClick={()=>onNavigate(2)}/>
+        <Card icon="💹" label="DIFERENÇA EM VALOR"         value={lastC?fmtCur(dV):"—"}   color={colorDiffVal}        onClick={()=>onNavigate(3)}/>
+      </div>
+
+      {/* STATUS DAS QUANTIDADES */}
+      {lastC&&(
+        <div style={{marginBottom:8}}>
+          <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>STATUS DAS QUANTIDADES</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            <Card icon="⬇️" label="ITENS ABAIXO DO MÍNIMO" value={abMin}   color={T.red}    onClick={()=>onNavigate(1)}/>
+            <Card icon="✅" label="ITENS DENTRO DA MARGEM"  value={inRange} color={T.green}  onClick={()=>onNavigate(1)}/>
+            <Card icon="⬆️" label="ITENS ACIMA DO MÁXIMO"   value={acMax}   color={T.purple} onClick={()=>onNavigate(1)}/>
           </div>
-          {/* Items below min */}
-          {abMin>0&&(
-            <div style={{marginBottom:8}}>
-              <div style={{fontSize:T.fs10,color:T.red,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>⬇ Abaixo do mínimo</div>
-              {items.filter(i=>i.min&&(lc[i.id]??0)<i.min).map(i=>(
-                <div key={i.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 8px",background:T.red+"0a",borderRadius:7,marginBottom:4}}>
-                  <span style={{fontSize:T.fs12,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,marginRight:8}}>{i.name}</span>
-                  <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                    <span style={{fontFamily:T.fontMono,fontSize:T.fs12,color:T.red,fontWeight:700}}>{lc[i.id]??0}</span>
-                    <span style={{fontSize:T.fs10,color:T.textMuted}}>Mínimo: {i.min}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {/* Items in range */}
-          {inRange>0&&(
-            <div style={{marginBottom:8}}>
-              <div style={{fontSize:T.fs10,color:T.green,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>✅ Dentro do intervalo</div>
-              {items.filter(i=>{const c=lc[i.id];if(c===undefined)return false;if(i.min&&i.max)return c>=i.min&&c<=i.max;if(i.min)return c>=i.min;if(i.max)return c<=i.max;return true;}).map(i=>(
-                <div key={i.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 8px",background:T.green+"0a",borderRadius:7,marginBottom:4}}>
-                  <span style={{fontSize:T.fs12,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,marginRight:8}}>{i.name}</span>
-                  <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                    <span style={{fontFamily:T.fontMono,fontSize:T.fs12,color:T.green,fontWeight:700}}>{lc[i.id]??0}</span>
-                    {i.min&&<span style={{fontSize:T.fs10,color:T.textMuted}}>Mínimo: {i.min}</span>}
-                    {i.max&&<span style={{fontSize:T.fs10,color:T.textMuted}}>Máximo: {i.max}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {/* Items above max */}
-          {acMax>0&&(
-            <div>
-              <div style={{fontSize:T.fs10,color:T.purple,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>⬆ Acima do máximo</div>
-              {items.filter(i=>i.max&&(lc[i.id]??0)>i.max).map(i=>(
-                <div key={i.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 8px",background:T.purple+"0a",borderRadius:7,marginBottom:4}}>
-                  <span style={{fontSize:T.fs12,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,marginRight:8}}>{i.name}</span>
-                  <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                    <span style={{fontFamily:T.fontMono,fontSize:T.fs12,color:T.purple,fontWeight:700}}>{lc[i.id]??0}</span>
-                    <span style={{fontSize:T.fs10,color:T.textMuted}}>Máximo: {i.max}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-        <Stat icon="🔢" label="Diferença em Quantidade" value={lastC?`${dQ>=0?"+":""}${dQ}`:"—"} color={dQ>=0?T.green:T.red}/>
-        <Stat icon="💹" label="Diferença em Valor" value={lastC?fmtCur(dV):"—"} color={dV<0?T.red:dV===0?T.green:T.accent} small/>
+      {/* STATUS DAS CONTAGENS */}
+      <div style={{marginBottom:8}}>
+        <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>STATUS DAS CONTAGENS</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+          <Card
+            icon="📅"
+            label="CONTAGENS AGENDADAS"
+            value={schPending.length+schOverdue.length}
+            sub={schOverdue.length>0?`${schOverdue.length} atrasada${schOverdue.length!==1?"s":""}`:schPending.length>0?`Próx: ${fmtDate(schPending[0].date)}`:null}
+            color={schOverdue.length>0?T.red:schPending.length>0?T.yellow:T.textMuted}
+            onClick={()=>onNavigate(2)}
+          />
+          <Card
+            icon="✅"
+            label="CONTAGENS VALIDADAS"
+            value={countingsValidated}
+            sub={countingsValidated>0&&lastC?`Última: ${fmtDate(lastC.date)}`:null}
+            color={countingsValidated>0?T.green:T.textMuted}
+            onClick={()=>onNavigate(2)}
+          />
+          <Card
+            icon="⏳"
+            label="CONTAGENS PENDENTES"
+            value={countingsPendingVal}
+            sub={countingsPendingVal>0?"Aguardando validação":null}
+            color={countingsPendingVal>0?T.yellow:T.textMuted}
+            onClick={()=>onNavigate(2)}
+          />
+        </div>
       </div>
+
     </div>
   );
 }
@@ -732,8 +714,8 @@ function ItemsTab({items,setItems,countings}) {
         const st=counted!==undefined?getStatus(it,counted):null;
         return (
           <div key={it.id} style={{...S.card({marginBottom:10,border:`1px solid ${st?(st.level==="danger"?T.red:st.level==="over"?T.purple:T.green)+"30":T.border}`})}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-              <div style={{flex:1}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+              <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2,flexWrap:"wrap"}}>
                   <div style={{fontWeight:700,fontSize:T.fs14}}>{it.name}</div>
                   {st&&<StatusBadge item={it} counted={counted}/>}
@@ -745,15 +727,14 @@ function ItemsTab({items,setItems,countings}) {
                   <span>Total adquirido: <b style={{color:T.text}}>{getTotalAcquired(it)} {it.unit}</b></span>
                 </div>
                 {(it.min||it.max)&&<div style={{fontSize:T.fs12,color:T.textMuted,marginTop:4}}>{it.min?`Mínimo: ${it.min}`:""}{it.min&&it.max?" · ":""}{it.max?`Máximo: ${it.max}`:""}</div>}
-                {/* Purchase history inline */}
                 {(it.purchases||[]).length>0&&(
                   <div style={{marginTop:8,background:T.surface,borderRadius:8,padding:"8px 10px"}}>
                     <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>📦 Histórico de compras</div>
                     {(it.purchases||[]).map((p,i)=>(
-                      <div key={i} style={{fontSize:T.fs11,color:T.textSub,display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                        <span>{fmtDate(p.date)}</span>
-                        <span style={{fontFamily:T.fontMono,color:T.green,fontWeight:600}}>+{p.qty} {it.unit}</span>
-                        {p.note&&<span style={{color:T.textMuted}}>{p.note}</span>}
+                      <div key={i} style={{fontSize:T.fs11,color:T.textSub,display:"flex",justifyContent:"space-between",marginBottom:2,gap:8}}>
+                        <span style={{flexShrink:0}}>{fmtDate(p.date)}</span>
+                        <span style={{fontFamily:T.fontMono,color:T.green,fontWeight:600,flexShrink:0}}>+{p.qty} {it.unit}</span>
+                        {p.note&&<span style={{color:T.textMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.note}</span>}
                       </div>
                     ))}
                   </div>
@@ -761,7 +742,7 @@ function ItemsTab({items,setItems,countings}) {
                 {it.attachment?.startsWith("data:image")&&<img src={it.attachment} alt="" style={{width:56,height:56,objectFit:"cover",borderRadius:8,marginTop:8}}/>}
                 {it.attachmentName&&!it.attachment?.startsWith("data:image")&&<div style={{fontSize:T.fs11,color:T.purple,marginTop:4}}>📎 {it.attachmentName}</div>}
               </div>
-              <div style={{display:"flex",gap:6,marginLeft:10,flexShrink:0}}>
+              <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0,alignSelf:"flex-start"}}>
                 <button onClick={()=>startEdit(it)} style={S.btn(T.accent,false,true)}>✏️</button>
                 <button onClick={()=>setConfirm({id:it.id,name:it.name})} style={S.btn(T.red,false,true)}>🗑</button>
               </div>
@@ -1169,7 +1150,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases}) {
             <>
               {/* Select all + grand total */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <button onClick={toggleAllHist} style={{...S.btn(T.surface,false,true),border:`1px solid ${T.border}`,color:T.textSub,fontSize:T.fs11}}>{itemsWithPurchases.every(g=>selHistory[g.it.id])?"Desmarcar todos":"Selecionar todos"}</button>
+                <button onClick={toggleAllHist} style={{...S.btn(T.surface,false,true),border:`1px solid ${T.border}`,color:T.textSub,fontSize:T.fs11}}>{itemsWithPurchases.every(g=>isHistSel(g.it.id))?"Desmarcar todos":"Selecionar todos"}</button>
                 <div style={{fontSize:T.fs12,color:T.textMuted}}>{selHistItems.length} de {itemsWithPurchases.length} selecionados</div>
               </div>
 
