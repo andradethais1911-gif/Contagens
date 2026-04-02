@@ -1,23 +1,18 @@
-const { kv } = require('@vercel/kv');
+import { kv } from '@vercel/kv';
 
-module.exports = async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+export default async function handler(req, res) {
+  const { key } = req.query;
+
   if (req.method === 'GET') {
-    try {
-      const value = await kv.get(req.query.key);
-      return res.status(200).json({ value: value ?? null });
-    } catch(e) {
-      return res.status(500).json({ error: e.message });
-    }
+    const value = await kv.get(key);
+    return res.status(200).json({ value });
   }
+
   if (req.method === 'POST') {
-    try {
-      const { key, value } = req.body;
-      await kv.set(key, value);
-      return res.status(200).json({ ok: true });
-    } catch(e) {
-      return res.status(500).json({ error: e.message });
-    }
+    const { key, value } = req.body;
+    await kv.set(key, value);
+    return res.status(200).json({ success: true });
   }
-  res.status(405).end();
-};
+
+  return res.status(405).json({ error: 'Método não permitido' });
+}
