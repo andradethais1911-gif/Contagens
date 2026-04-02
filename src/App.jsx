@@ -535,7 +535,7 @@ function ManagerPanel({data,onBack}) {
       <div style={{padding:"18px 16px"}}>
         {tab===0&&<DashTab items={items} countings={countings} scheduledDates={scheduledDates} onNavigate={setTab}/>}
         {tab===1&&<ItemsTab items={items} setItems={setItems} countings={countings}/>}
-        {tab===2&&<CountTab items={items} countings={countings} setCountings={setCountings} setItems={setItems} scheduledDates={scheduledDates} setScheduledDates={setScheduledDates}/>}
+        {tab===2&&<CountTab items={items} countings={countings} setCountings={setCountings} setItems={setItems} scheduledDates={scheduledDates} setScheduledDates={setScheduledDates} purchases={purchases}/>}
         {tab===3&&<BuyTab items={items} setItems={setItems} countings={countings} purchases={purchases} setPurchases={setPurchases}/>}
         {tab===4&&<CfgTab appPass={appPass} setAppPass={setAppPass} passHint={passHint} setPassHint={setPassHint} whatsapp={whatsapp} setWhatsapp={setWhatsapp}/>}
       </div>
@@ -555,12 +555,6 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
   const dQ=ex-items.length;
   const dV=vC-vA;
 
-  // Colors driven by comparison logic
-  const colorContabilizados = !lastC ? T.textSub : ex===items.length ? T.green : ex<items.length ? T.red : T.green;
-  const colorDiffQtd = !lastC ? T.textSub : dQ>0 ? T.green : dQ<0 ? T.red : T.textSub;
-  const colorVContabilizado = !lastC ? T.textSub : vC===0&&vA===0 ? T.textSub : vC<vA ? T.red : vC===vA ? T.green : T.green;
-  const colorDiffVal = !lastC ? T.textSub : dV>0 ? T.green : dV<0 ? T.red : T.textSub;
-
   const abMin=items.filter(i=>i.min&&(lc[i.id]??0)<i.min).length;
   const acMax=items.filter(i=>i.max&&(lc[i.id]??0)>i.max).length;
   const inRange=items.filter(i=>{const c=lc[i.id];if(c===undefined)return false;if(i.min&&i.max)return c>=i.min&&c<=i.max;if(i.min)return c>=i.min;if(i.max)return c<=i.max;return true;}).length;
@@ -570,6 +564,13 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
   const schOverdue=allSch.filter(s=>!s.done&&s.date<todayStr());
   const countingsValidated=sortedCountings.filter(c=>c.validated).length;
   const countingsPendingVal=sortedCountings.filter(c=>!c.validated).length;
+
+  // Colors driven by comparison logic
+  const colorContabilizados = !lastC ? T.textSub : ex===items.length ? T.green : ex<items.length ? T.red : T.green;
+  const colorDiffQtd = !lastC ? T.textSub : dQ>=0 ? T.green : T.red;
+  const colorVContabilizado = !lastC ? T.textSub : vC===0&&vA===0 ? T.textSub : vC<vA ? T.red : T.green;
+  const colorDiffVal = !lastC ? T.textSub : dV>=0 ? T.green : T.red;
+  const colorPendingVal = countingsPendingVal===0 ? T.green : T.red;
 
   const Card=({icon,value,label,sub,color,onClick=null})=>(
     <div onClick={onClick||undefined} style={{
@@ -646,7 +647,7 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
             label="CONTAGENS PENDENTES"
             value={countingsPendingVal}
             sub={countingsPendingVal>0?"Aguardando validação":null}
-            color={countingsPendingVal>0?T.yellow:T.textMuted}
+            color={colorPendingVal}
             onClick={()=>onNavigate(2)}
           />
         </div>
@@ -715,7 +716,7 @@ function ItemsTab({items,setItems,countings}) {
         return (
           <div key={it.id} style={{...S.card({marginBottom:10,border:`1px solid ${st?(st.level==="danger"?T.red:st.level==="over"?T.purple:T.green)+"30":T.border}`})}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
-              <div style={{flex:1,minWidth:0}}>
+              <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2,flexWrap:"wrap"}}>
                   <div style={{fontWeight:700,fontSize:T.fs14}}>{it.name}</div>
                   {st&&<StatusBadge item={it} counted={counted}/>}
@@ -755,7 +756,7 @@ function ItemsTab({items,setItems,countings}) {
 }
 
 // ─── COUNTINGS TAB ───────────────────────────────────────────────────────────
-function CountTab({items,countings,setCountings,setItems,scheduledDates,setScheduledDates}) {
+function CountTab({items,countings,setCountings,setItems,scheduledDates,setScheduledDates,purchases}) {
   const [subTab,setSubTab]=useState("history");
   const [sel,setSel]=useState(null);
   const [schForm,setSchForm]=useState({label:"",date:""});
@@ -840,49 +841,53 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
             const isLast=idx===0;
             const isExp=expanded[c.id];
             const ciList=c.items||[];
-            const visible=isExp?ciList:ciList.slice(0,3);
             return(
               <div key={c.id} style={S.card({marginBottom:10})}>
-                {/* Header row with actions on top, horizontal */}
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                {/* Header — click to expand/collapse */}
+                <div
+                  onClick={()=>setExpanded(p=>({...p,[c.id]:!p[c.id]}))}
+                  style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",cursor:"pointer"}}
+                >
                   <div style={{flex:1}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:2}}>
                       <div style={{fontWeight:700,fontSize:T.fs14}}>{c.label}</div>
                       {isLast&&<span style={S.tag(T.green)}>ÚLTIMA</span>}
                       {c.validated?<span style={S.tag(T.green)}>✅ VALIDADA</span>:<span style={S.tag(T.yellow)}>⏳ PENDENTE</span>}
                     </div>
-                    <div style={{fontSize:T.fs12,color:T.textMuted}}>{fmtDate(c.date)} · {ciList.length} insumos</div>
+                    <div style={{fontSize:T.fs12,color:T.textMuted}}>{fmtDate(c.date)} · {ciList.length} insumo{ciList.length!==1?"s":""}</div>
                   </div>
-                  {/* Actions horizontal on right */}
-                  <div style={{display:"flex",gap:6,flexShrink:0,marginLeft:10}}>
-                    <button onClick={()=>setSel(c)} style={S.btn(T.accent,false,true)}>👁</button>
-                    {!c.validated&&<button onClick={()=>validateCounting(c)} style={S.btn(T.green,false,true)} title="Validar">✅</button>}
-                    <button onClick={()=>setConfirm({message:`Excluir "${c.label}"?`,onConfirm:()=>{setCountings(prev=>prev.filter(x=>x.id!==c.id));setConfirm(null);}})} style={S.btn(T.red,false,true)}>🗑</button>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:10,flexShrink:0}}>
+                    <span style={{fontSize:T.fs11,color:T.accent}}>{isExp?"▲":"▼"}</span>
+                    {!c.validated&&<button onClick={e=>{e.stopPropagation();validateCounting(c);}} style={S.btn(T.green,false,true)} title="Validar">✅</button>}
+                    <button onClick={e=>{e.stopPropagation();setConfirm({message:`Excluir "${c.label}"?\n\nIsso também desfará o vínculo com o agendamento correspondente.`,onConfirm:()=>{setCountings(prev=>prev.filter(x=>x.id!==c.id));setScheduledDates(prev=>prev.map(s=>s.linkedCountingId===c.id?{...s,done:false,linkedCountingId:null}:s));setConfirm(null);}});}} style={S.btn(T.red,false,true)}>🗑</button>
                   </div>
                 </div>
-                {/* Items list with max and needed */}
-                {visible.map(ci=>{
-                  const it=items.find(i=>i.id===ci.id)||ci;
-                  const need = it.min && ci.counted < it.min
-                    ? (it.max ? Math.max(it.max - ci.counted, 0) : Math.max(it.min - ci.counted, 0))
-                    : 0;
-                  return(
-                  <div key={ci.id} style={{padding:"7px 0",borderBottom:`1px solid ${T.border}`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                      <span style={{fontSize:T.fs12,color:T.text,fontWeight:600,flex:1,marginRight:8}}>{ci.name}</span>
-                      <div style={{textAlign:"right",flexShrink:0}}>
-                        <div style={{fontFamily:"monospace",fontSize:T.fs13,fontWeight:700,color:T.accent}}>{ci.counted} <span style={{fontSize:T.fs11,color:T.textMuted}}>{ci.unit||it.unit||""}</span></div>
-                      </div>
-                    </div>
-                    <div style={{display:"flex",gap:12,marginTop:3,flexWrap:"wrap"}}>
-                      <span style={{fontSize:T.fs11,color:T.textMuted}}>Contabilizado: <b style={{color:T.accent}}>{ci.counted}</b></span>
-                      {it.max?<span style={{fontSize:T.fs11,color:T.textMuted}}>Máximo: <b style={{color:T.green}}>{it.max}</b></span>:null}
-                      {need>0?<span style={{fontSize:T.fs11,color:T.yellow,fontWeight:700}}>Necessário: +{need}</span>:
-                        it.max?<span style={{fontSize:T.fs11,color:T.green}}>✓ Atingido</span>:null}
-                    </div>
+                {/* Expandable items */}
+                {isExp&&(
+                  <div style={{marginTop:10}}>
+                    {ciList.map(ci=>{
+                      const it=items.find(i=>i.id===ci.id)||ci;
+                      const need = it.min && ci.counted < it.min
+                        ? (it.max ? Math.max(it.max - ci.counted, 0) : Math.max(it.min - ci.counted, 0))
+                        : 0;
+                      return(
+                        <div key={ci.id} style={{padding:"7px 0",borderBottom:`1px solid ${T.border}`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                            <span style={{fontSize:T.fs12,color:T.text,fontWeight:600,flex:1,marginRight:8}}>{ci.name}</span>
+                            <div style={{textAlign:"right",flexShrink:0}}>
+                              <div style={{fontFamily:"monospace",fontSize:T.fs13,fontWeight:700,color:T.accent}}>{ci.counted} <span style={{fontSize:T.fs11,color:T.textMuted}}>{ci.unit||it.unit||""}</span></div>
+                            </div>
+                          </div>
+                          <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
+                            {it.max?<span style={{fontSize:T.fs11,color:T.textMuted}}>Máximo: <b style={{color:T.green}}>{it.max}</b></span>:null}
+                            {need>0?<span style={{fontSize:T.fs11,color:T.yellow,fontWeight:700}}>Necessário: +{need}</span>:
+                              it.max?<span style={{fontSize:T.fs11,color:T.green}}>✓ Atingido</span>:null}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );})}
-                {ciList.length>3&&<button onClick={()=>setExpanded(p=>({...p,[c.id]:!p[c.id]}))} style={{background:"none",border:"none",color:T.accent,cursor:"pointer",fontSize:T.fs12,marginTop:6,padding:0,fontFamily:T.fontBase,fontWeight:600}}>{isExp?"▲ Recolher":`▼ Ver mais ${ciList.length-3} itens`}</button>}
+                )}
               </div>
             );
           })}
@@ -907,18 +912,26 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
           {sortedSch.map(sd=>{
             const days=daysUntil(sd.date),ov=days<0&&!sd.done;
             const color=sd.done?T.green:ov?T.red:days<=2?T.yellow:T.text;
+            const linkedCounting=sd.linkedCountingId?countings.find(c=>c.id===sd.linkedCountingId):null;
+            const isLocked=!!linkedCounting; // locked if has a counting linked
             return(
-              <div key={sd.id} style={{...S.card({marginBottom:10,border:`1px solid ${color}20`}),display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:600,fontSize:T.fs13,color}}>{sd.label}</div>
-                  <div style={{fontSize:T.fs11,color:T.textMuted,marginTop:2}}>
-                    {fmtDate(sd.date)}{" "}
-                    {sd.done?"· ✅ Concluído (pelo contador)":ov?"· ⚠️ ATRASADA — aguardando realização":days===0?"· 📋 HOJE":`· em ${days} dia${days!==1?"s":""}`}
+              <div key={sd.id} style={{...S.card({marginBottom:10,border:`1px solid ${color}20`})}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:600,fontSize:T.fs13,color}}>{sd.label}</div>
+                    <div style={{fontSize:T.fs11,color:T.textMuted,marginTop:2}}>
+                      {fmtDate(sd.date)}{" "}
+                      {sd.done?"· ✅ Concluído (pelo contador)":ov?"· ⚠️ ATRASADA — aguardando realização":days===0?"· 📋 HOJE":`· em ${days} dia${days!==1?"s":""}`}
+                    </div>
+                    {isLocked&&<div style={{fontSize:T.fs10,color:T.yellow,marginTop:4}}>🔒 Vinculada à contagem "{linkedCounting.label}" — exclua a contagem para liberar</div>}
                   </div>
-                </div>
-                <div style={{display:"flex",gap:6,marginLeft:8}}>
-                  {!sd.done&&<button onClick={()=>startEditSch(sd)} style={S.btn(T.accent,false,true)}>✏️</button>}
-                  <button onClick={()=>setConfirm({message:`Excluir "${sd.label}"?`,onConfirm:()=>{setScheduledDates(prev=>prev.filter(s=>s.id!==sd.id));setConfirm(null);}})} style={S.btn(T.red,false,true)}>🗑</button>
+                  <div style={{display:"flex",gap:6,marginLeft:8}}>
+                    {!sd.done&&!isLocked&&<button onClick={()=>startEditSch(sd)} style={S.btn(T.accent,false,true)}>✏️</button>}
+                    {isLocked
+                      ? <button disabled style={{...S.btn(T.textMuted,false,true),opacity:.4,cursor:"not-allowed"}}>🗑</button>
+                      : <button onClick={()=>setConfirm({message:`Excluir agendamento "${sd.label}"?`,onConfirm:()=>{setScheduledDates(prev=>prev.filter(s=>s.id!==sd.id));setConfirm(null);}})} style={S.btn(T.red,false,true)}>🗑</button>
+                    }
+                  </div>
                 </div>
               </div>
             );
@@ -930,7 +943,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
           </div>
         </div>
       )}
-      {subTab==="evolution"&&<EvoTab items={items} countings={countings}/>}
+      {subTab==="evolution"&&<EvoTab items={items} countings={countings} purchases={purchases}/>}
     </div>
   );
 }
@@ -1223,93 +1236,185 @@ function BuyTab({items,setItems,countings,purchases,setPurchases}) {
 }
 
 // ─── EVOLUTION TAB ───────────────────────────────────────────────────────────
-function EvoTab({items,countings}) {
-  const [selItem,setSelItem]=useState("all");
-  const sorted=[...countings].sort((a,b)=>a.date?.localeCompare(b.date));
-  const getSeries=()=>{
-    const init=selItem==="all"
-      ?{qty:items.reduce((s,i)=>s+Number(i.acquiredQty||0),0),label:"Aquisição Inicial",date:null}
-      :(()=>{const it=items.find(i=>i.id===Number(selItem));return{qty:Number(it?.acquiredQty||0),label:"Aquisição Inicial",date:null};})();
-    const rows=sorted.map(c=>{
-      if(selItem==="all"){const qty=(c.items||[]).reduce((s,ci)=>s+ci.counted,0);return{qty,label:c.label,date:c.date};}
-      const ci=(c.items||[]).find(i=>i.id===Number(selItem));
-      return{qty:ci?.counted??0,label:c.label,date:c.date};
+function EvoTab({items,countings,purchases}) {
+  // Default to first item if available
+  const firstItemId = items.length>0 ? String(items[0].id) : null;
+  const [selItem,setSelItem]=useState(firstItemId||"");
+
+  const si = items.find(i=>i.id===Number(selItem));
+
+  // Build series for selected item:
+  // - Each purchase row (chronological) showing accumulative qty bought + date
+  // - Then each counting row showing qty counted + date
+  // Baseline for comparison = total acquired (all purchases)
+  const getSeries = () => {
+    if(!si) return [];
+    const itemPurchases = [...(purchases||[])]
+      .filter(p=>p.itemId===si.id)
+      .sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+
+    // Build accumulative purchase rows
+    let accQty=0;
+    const purchaseRows = itemPurchases.map(p=>{
+      accQty+=Number(p.qty||0);
+      return {qty:accQty, label:`Compra (+${p.qty})`, date:p.date, type:"purchase"};
     });
-    return[init,...rows];
+
+    // Counting rows
+    const sortedCountings=[...countings].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    const countingRows = sortedCountings.map(c=>{
+      const ci=(c.items||[]).find(i=>i.id===si.id);
+      return{qty:ci?.counted??0, label:c.label, date:c.date, type:"counting"};
+    });
+
+    // Merge and sort by date, then type (purchase before counting on same day)
+    const all=[...purchaseRows,...countingRows].sort((a,b)=>{
+      if((a.date||"")!==(b.date||"")) return (a.date||"").localeCompare(b.date||"");
+      return a.type==="purchase"?-1:1;
+    });
+
+    return all;
   };
-  const series=getSeries();
-  const baseline=series[0]?.qty||0;
-  const maxQ=Math.max(...series.map(d=>d.qty),baseline,1);
-  const si=selItem==="all"?null:items.find(i=>i.id===Number(selItem));
-  const minR=si?.min||null;const maxR=si?.max||null;
+
+  const series = getSeries();
+  const totalAcquired = getTotalAcquired(si||{acquiredQty:0,purchases:[]});
+  // Last counting qty for this item
+  const lastCounting = [...countings].sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0];
+  const lastCountedQty = lastCounting ? (lastCounting.items||[]).find(i=>i.id===si?.id)?.counted??0 : 0;
+  const diff = lastCounting && si ? lastCountedQty - totalAcquired : null;
+
+  const maxQ = Math.max(...series.map(d=>d.qty), totalAcquired, lastCountedQty, 1);
+  const minR = si?.min||null;
+  const maxR = si?.max||null;
+
   return (
     <div>
+      {/* Item selector — no "all items" option */}
       <div style={{marginBottom:14}}>
-        <div style={S.label}>Filtrar por insumo</div>
-        <select value={selItem} onChange={e=>setSelItem(e.target.value)} style={S.input()}>
-          <option value="all">Todos os insumos (total geral)</option>
-          {items.map(i=><option key={i.id} value={String(i.id)}>{i.name}</option>)}
-        </select>
+        <div style={S.label}>Selecionar insumo</div>
+        {items.length===0
+          ? <div style={{fontSize:T.fs13,color:T.textMuted}}>Nenhum insumo cadastrado.</div>
+          : <select value={selItem} onChange={e=>setSelItem(e.target.value)} style={S.input()}>
+              {items.map(i=><option key={i.id} value={String(i.id)}>{i.name}</option>)}
+            </select>
+        }
       </div>
-      {sorted.length===0&&<div style={{textAlign:"center",color:T.textMuted,padding:"40px 0",fontSize:T.fs13}}>Nenhuma contagem registrada ainda.</div>}
-      {sorted.length>0&&(
+
+      {!si&&<div style={{textAlign:"center",color:T.textMuted,padding:"40px 0",fontSize:T.fs13}}>Selecione um insumo para ver a evolução.</div>}
+
+      {si&&(
         <>
-          <div style={S.card({marginBottom:14,padding:"16px 14px"})}>
-            <div style={{fontWeight:700,marginBottom:4,color:T.accent,fontSize:T.fs13}}>📊 Evolução em Quantidade</div>
-            <div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:14}}>Barra laranja = referência inicial. Verde = maior, vermelho = menor.</div>
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {series.map((d,i)=>{
-                const pct=maxQ>0?(d.qty/maxQ)*100:0;
-                const isB=i===0;
-                const diff=i>0?d.qty-baseline:null;
-                const bc=isB?T.warm:diff===null?T.accent:diff>=0?T.green:T.red;
-                return (
-                  <div key={i}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                      <div style={{fontSize:T.fs12,color:isB?T.warm:T.text,fontWeight:isB?700:500,flex:1,paddingRight:8,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                        {d.label}{d.date?<span style={{color:T.textMuted,fontSize:T.fs10}}> · {fmtDate(d.date)}</span>:""}
-                      </div>
-                      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                        {diff!==null&&<span style={{fontSize:T.fs11,fontWeight:700,color:diff>0?T.green:diff<0?T.red:T.textMuted,fontFamily:T.fontMono}}>{diff>0?`+${diff}`:diff<0?String(diff):"="}</span>}
-                        <span style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:bc,minWidth:30,textAlign:"right"}}>{d.qty}</span>
-                      </div>
-                    </div>
-                    <div style={{position:"relative",height:18,background:T.surface,borderRadius:6,overflow:"hidden"}}>
-                      {!isB&&baseline>0&&<div style={{position:"absolute",left:`${(baseline/maxQ)*100}%`,top:0,bottom:0,width:2,background:T.warm+"88",zIndex:2}}/>}
-                      {minR&&maxR&&<><div style={{position:"absolute",left:`${(minR/maxQ)*100}%`,top:0,bottom:0,width:1,background:T.red+"66",zIndex:2}}/><div style={{position:"absolute",left:`${(maxR/maxQ)*100}%`,top:0,bottom:0,width:1,background:T.purple+"66",zIndex:2}}/></>}
-                      <div style={{height:"100%",width:`${pct}%`,background:bc,borderRadius:6,transition:"width .5s",opacity:.85}}/>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:12,fontSize:T.fs10,color:T.textMuted}}>
-              <span>🟧 Inicial</span><span>🟩 Maior</span><span>🟥 Menor</span>
-              {minR&&<span style={{color:T.red}}>│ mínimo ({minR})</span>}
-              {maxR&&<span style={{color:T.purple}}>│ máximo ({maxR})</span>}
+          {/* Summary card: total adquirido vs última contagem */}
+          <div style={{...S.card({marginBottom:14,padding:"14px 16px",border:`1px solid ${diff===null?T.border:diff>=0?T.green+"44":T.red+"44"}`})}}>
+            <div style={{fontSize:T.fs12,fontWeight:700,color:T.text,marginBottom:10}}>⚖️ Comparativo: Total Adquirido × Última Contagem</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+              <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Total Adquirido</div>
+                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.warm}}>{totalAcquired}</div>
+                <div style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</div>
+              </div>
+              <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Última Contagem</div>
+                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:diff===null?T.textSub:diff>=0?T.green:T.red}}>{lastCounting?lastCountedQty:"—"}</div>
+                <div style={{fontSize:T.fs10,color:T.textMuted}}>{lastCounting?fmtDate(lastCounting.date):"Sem contagem"}</div>
+              </div>
+              <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Diferença</div>
+                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:diff===null?T.textSub:diff>=0?T.green:T.red}}>
+                  {diff===null?"—":diff>0?`+${diff}`:String(diff)}
+                </div>
+                <div style={{fontSize:T.fs10,color:diff===null?T.textMuted:diff>=0?T.green:T.red}}>{diff===null?"":diff>=0?"Em dia":"Abaixo do adquirido"}</div>
+              </div>
             </div>
           </div>
-          <div style={S.card()}>
-            <div style={{fontWeight:700,marginBottom:12,color:T.purple,fontSize:T.fs13}}>📋 Tabela Comparativa</div>
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",minWidth:400}}>
-                <thead>
-                  <tr style={{background:T.surface}}>{["Contagem","Data","Insumo","Quantidade","Diferença"].map((h,i)=><th key={i} style={{padding:"7px 8px",textAlign:"left",color:T.textMuted,fontWeight:600,fontSize:T.fs11,whiteSpace:"nowrap"}}>{h}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {series.map((d,i)=>{const prev=i>0?series[i-1]:null;const diff=prev?d.qty-prev.qty:null;return(
-                    <tr key={i} style={{borderBottom:`1px solid ${T.border}`}}>
-                      <td style={{padding:"7px 8px",fontWeight:i===0?700:500,color:i===0?T.warm:T.text,fontSize:T.fs12,whiteSpace:"nowrap"}}>{d.label}</td>
-                      <td style={{padding:"7px 8px",color:T.textMuted,fontSize:T.fs12,whiteSpace:"nowrap"}}>{d.date?fmtDate(d.date):"—"}</td>
-                      <td style={{padding:"7px 8px",color:T.textSub,fontSize:T.fs12}}>{selItem==="all"?"Todos":si?.name||"—"}</td>
-                      <td style={{padding:"7px 8px",fontFamily:T.fontMono,color:T.accent,fontSize:T.fs12,fontWeight:600}}>{d.qty}</td>
-                      <td style={{padding:"7px 8px"}}>{diff!==null?<span style={{color:diff>0?T.green:diff<0?T.red:T.textMuted,fontWeight:700,fontFamily:T.fontMono,fontSize:T.fs12}}>{diff>0?"+":""}{diff}</span>:<span style={{color:T.textMuted,fontSize:T.fs12}}>—</span>}</td>
+
+          {/* Chart */}
+          {series.length>0&&(
+            <div style={S.card({marginBottom:14,padding:"16px 14px"})}>
+              <div style={{fontWeight:700,marginBottom:4,color:T.accent,fontSize:T.fs13}}>📊 Evolução — {si.name}</div>
+              <div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:14}}>
+                🟧 Compras (acumulado) · 🟦 Contagens
+                {minR&&<span> · <span style={{color:T.red}}>│ mín ({minR})</span></span>}
+                {maxR&&<span> · <span style={{color:T.purple}}>│ máx ({maxR})</span></span>}
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {series.map((d,i)=>{
+                  const pct=maxQ>0?(d.qty/maxQ)*100:0;
+                  const isPurch=d.type==="purchase";
+                  const bc=isPurch?T.warm:T.accent;
+                  return (
+                    <div key={i}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6,flex:1,paddingRight:8,overflow:"hidden"}}>
+                          <span style={{fontSize:9,color:isPurch?T.warm:T.accent,fontWeight:700,flexShrink:0}}>{isPurch?"💰":"📋"}</span>
+                          <span style={{fontSize:T.fs11,color:T.text,fontWeight:isPurch?600:400,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.label}</span>
+                          {d.date&&<span style={{color:T.textMuted,fontSize:9,flexShrink:0}}>· {fmtDate(d.date)}</span>}
+                        </div>
+                        <span style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:bc,flexShrink:0}}>{d.qty}</span>
+                      </div>
+                      <div style={{position:"relative",height:14,background:T.surface,borderRadius:4,overflow:"hidden"}}>
+                        {minR&&maxQ>0&&<div style={{position:"absolute",left:`${(minR/maxQ)*100}%`,top:0,bottom:0,width:1,background:T.red+"66",zIndex:2}}/>}
+                        {maxR&&maxQ>0&&<div style={{position:"absolute",left:`${(maxR/maxQ)*100}%`,top:0,bottom:0,width:1,background:T.purple+"66",zIndex:2}}/>}
+                        <div style={{height:"100%",width:`${pct}%`,background:bc,borderRadius:4,transition:"width .5s",opacity:.85}}/>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {series.length===0&&<div style={{textAlign:"center",color:T.textMuted,padding:"30px 0",fontSize:T.fs13}}>Nenhuma compra ou contagem registrada para este insumo.</div>}
+
+          {/* Comparative table */}
+          {series.length>0&&(
+            <div style={S.card({padding:"14px"})}>
+              <div style={{fontWeight:700,marginBottom:12,color:T.purple,fontSize:T.fs13}}>📋 Tabela Comparativa</div>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",minWidth:320}}>
+                  <thead>
+                    <tr style={{background:T.surface}}>
+                      {["Tipo","Data","Quantidade","Diferença"].map((h,i)=>(
+                        <th key={i} style={{padding:"7px 8px",textAlign:"left",color:T.textMuted,fontWeight:600,fontSize:T.fs11,whiteSpace:"nowrap"}}>{h}</th>
+                      ))}
                     </tr>
-                  );})}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {series.map((d,i)=>{
+                      const prev=i>0?series[i-1]:null;
+                      const diff=prev?d.qty-prev.qty:null;
+                      const isPurch=d.type==="purchase";
+                      return(
+                        <tr key={i} style={{borderBottom:`1px solid ${T.border}`}}>
+                          <td style={{padding:"7px 8px",fontSize:T.fs12,whiteSpace:"nowrap"}}>
+                            <span style={{color:isPurch?T.warm:T.accent,fontWeight:600}}>{isPurch?"💰 Compra":"📋 Contagem"}</span>
+                            <div style={{fontSize:T.fs10,color:T.textMuted,marginTop:1}}>{d.label}</div>
+                          </td>
+                          <td style={{padding:"7px 8px",color:T.textMuted,fontSize:T.fs12,whiteSpace:"nowrap"}}>{d.date?fmtDate(d.date):"—"}</td>
+                          <td style={{padding:"7px 8px",fontFamily:T.fontMono,color:isPurch?T.warm:T.accent,fontSize:T.fs12,fontWeight:600}}>{d.qty} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></td>
+                          <td style={{padding:"7px 8px"}}>
+                            {diff!==null
+                              ?<span style={{color:diff>0?T.green:diff<0?T.red:T.textMuted,fontWeight:700,fontFamily:T.fontMono,fontSize:T.fs12}}>{diff>0?"+":""}{diff}</span>
+                              :<span style={{color:T.textMuted,fontSize:T.fs12}}>—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {/* Final row: total adquirido vs última contagem */}
+                    {lastCounting&&(
+                      <tr style={{background:T.surface,borderTop:`2px solid ${T.border}`}}>
+                        <td colSpan={2} style={{padding:"7px 8px",fontSize:T.fs11,fontWeight:700,color:T.text}}>⚖️ Total Adquirido × Última Contagem</td>
+                        <td style={{padding:"7px 8px",fontFamily:T.fontMono,fontSize:T.fs12,color:T.text}}>{totalAcquired} × {lastCountedQty}</td>
+                        <td style={{padding:"7px 8px"}}>
+                          <span style={{color:diff>=0?T.green:T.red,fontWeight:700,fontFamily:T.fontMono,fontSize:T.fs12}}>{diff>0?"+":""}{diff}</span>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
     </div>
@@ -1383,7 +1488,7 @@ export default function App() {
       case "counter": {
         const handleSubmit = (counting, sd) => {
           data.setCountings(prev => [...prev, counting]);
-          if (sd) data.setScheduledDates(prev => prev.map(s => s.id === sd.id ? {...s, done:true} : s));
+          if (sd) data.setScheduledDates(prev => prev.map(s => s.id === sd.id ? {...s, done:true, linkedCountingId:counting.id} : s));
         };
         return <CounterView items={data.items} countings={data.countings} scheduledDates={data.scheduledDates} onSubmit={handleSubmit} onBack={goHome} whatsapp={data.whatsapp}/>;
       }
