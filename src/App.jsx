@@ -49,6 +49,7 @@ const addDays = (s,n) => { const d=new Date(s+"T00:00:00");d.setDate(d.getDate()
 const normPhone = v => v.replace(/\D/g,"");
 const fmtCur = v => Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const upper = s => s.toUpperCase();
+const fmtValInput = v => { const n = parseFloat(String(v).replace(",","."));return isNaN(n)?"":n.toFixed(2); };
 
 function getStatus(item, counted) {
   if (counted===undefined||counted===null) return null;
@@ -209,6 +210,12 @@ function sendWA(phone,counting,items) {
   const a=document.createElement("a");a.href=`https://wa.me/${normPhone(phone)}?text=${encodeURIComponent(msg)}`;a.target="_blank";a.rel="noopener";document.body.appendChild(a);a.click();document.body.removeChild(a);
 }
 
+// Send WhatsApp message when counter is blocked
+function sendWABlocked(phone, reason, scheduledDate) {
+  const msg = `Olá, Teresa! 😊\n\nEstou tentando realizar a contagem de estoque${scheduledDate ? ` referente a *${scheduledDate.label}* (prevista para ${fmtDate(scheduledDate.date)})` : ""}, mas o sistema não está permitindo o registro.\n\n⚠️ *Motivo:* ${reason}\n\nPor favor, verifique o agendamento ou libere o acesso para que eu possa realizar a contagem.\n\n_Sistema de Gestão de Contagens_`;
+  const a=document.createElement("a");a.href=`https://wa.me/${normPhone(phone)}?text=${encodeURIComponent(msg)}`;a.target="_blank";a.rel="noopener";document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
 function useAppData() {
   const [state,setState] = useState({items:[],countings:[],scheduledDates:[],appPass:null,passHint:null,whatsapp:null});
   const [loading,setLoading] = useState(true);
@@ -231,8 +238,22 @@ function useAppData() {
   };
 }
 
+// Returns the best scheduled counting for today: today's exact match first, then overdue (most recent)
+function getActiveScheduled(scheduledDates) {
+  const today = todayStr();
+  const pending = (scheduledDates||[]).filter(sd => !sd.done);
+  // Exact today
+  const todayMatch = pending.find(sd => sd.date === today);
+  if (todayMatch) return { sd: todayMatch, status: "today" };
+  // Overdue (past, not done) - pick the most overdue
+  const overdue = pending.filter(sd => sd.date < today).sort((a,b) => a.date.localeCompare(b.date));
+  if (overdue.length > 0) return { sd: overdue[0], status: "overdue" };
+  return null;
+}
+
 function HomeScreen({onManager,onCounter,scheduledDates}) {
   const upcoming=(scheduledDates||[]).filter(sd=>!sd.done&&daysUntil(sd.date)>=0&&daysUntil(sd.date)<=7).sort((a,b)=>a.date.localeCompare(b.date));
+  const active = getActiveScheduled(scheduledDates);
   return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:T.fontBase,position:"relative",overflow:"hidden"}}>
       <div style={{position:"absolute",inset:0,pointerEvents:"none"}}>
@@ -240,10 +261,9 @@ function HomeScreen({onManager,onCounter,scheduledDates}) {
         <div style={{position:"absolute",bottom:"-10%",right:"-20%",width:400,height:400,borderRadius:"50%",background:`radial-gradient(circle,${T.warm}07 0%,transparent 65%)`}}/>
       </div>
       <div style={{position:"relative",width:"100%",maxWidth:380}}>
-        <div style={{textAlign:"center",marginBottom:40}}>
-          <div style={{width:64,height:64,background:`linear-gradient(135deg,${T.accent},${T.accentDim})`,borderRadius:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,margin:"0 auto 16px",boxShadow:`0 8px 24px ${T.accent}30`}}>📦</div>
-          <div style={{fontFamily:T.fontMono,fontSize:T.fs24,fontWeight:700,color:T.text,letterSpacing:2}}>ESTOQUE</div>
-          <div style={{fontFamily:T.fontMono,fontSize:T.fs11,color:T.accent,letterSpacing:4,marginTop:4}}>GESTÃO DE CONTAGENS</div>
+        <div style={{textAlign:"center"}}>
+          <div style={{width:64,height:64,background:`linear-gradient(135deg,${T.accent},${T.accentDim})`,borderRadius:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,margin:"0 auto 16px",boxShadow:`0 8px 24px ${T.accent}30`}}>🏠</div>
+          <div style={{fontFamily:T.fontMono,fontSize:T.fs24,fontWeight:700,color:"#ffffff",letterSpacing:2,marginBottom:16}}>GESTÃO DE CONTAGENS</div>
         </div>
         {upcoming.length>0&&(
           <div style={{...S.card({marginBottom:16,background:T.yellow+"0d",border:`1px solid ${T.yellow}30`})}}>
@@ -254,7 +274,14 @@ function HomeScreen({onManager,onCounter,scheduledDates}) {
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           <button onClick={onCounter} style={{background:`linear-gradient(135deg,${T.accentDim}22,${T.accent}11)`,border:`1.5px solid ${T.accent}35`,borderRadius:14,padding:"20px",cursor:"pointer",fontFamily:T.fontBase,display:"flex",alignItems:"center",gap:14,textAlign:"left",width:"100%"}}>
             <div style={{width:48,height:48,background:`linear-gradient(135deg,${T.accent},${T.accentDim})`,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>🧮</div>
-            <div><div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color:T.accent,letterSpacing:1}}>ÁREA DO CONTADOR</div><div style={{fontSize:T.fs12,color:T.textMuted,marginTop:3}}>Acesso livre · Preencha as quantidades</div></div>
+            <div>
+              <div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color:T.accent,letterSpacing:1}}>ÁREA DO CONTADOR</div>
+              <div style={{fontSize:T.fs12,color:T.textMuted,marginTop:3}}>
+                {active ? (active.status==="today"?`📋 Contagem agendada para HOJE: ${active.sd.label}`:
+                  `⚠️ Contagem atrasada: ${active.sd.label} (${fmtDate(active.sd.date)})`)
+                  :"Acesso livre · Preencha as quantidades"}
+              </div>
+            </div>
           </button>
           <button onClick={onManager} style={{background:`linear-gradient(135deg,${T.warmDim}22,${T.warm}11)`,border:`1.5px solid ${T.warm}35`,borderRadius:14,padding:"20px",cursor:"pointer",fontFamily:T.fontBase,display:"flex",alignItems:"center",gap:14,textAlign:"left",width:"100%"}}>
             <div style={{width:48,height:48,background:`linear-gradient(135deg,${T.warm},${T.warmDim})`,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>🔐</div>
@@ -304,26 +331,47 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
   const [confirmed,setConfirmed]=useState({});
   const [inputVal,setInputVal]=useState("");
   const [saved,setSaved]=useState(null);
-  const upcoming=(scheduledDates||[]).filter(sd=>!sd.done&&daysUntil(sd.date)>=0&&daysUntil(sd.date)<=3).sort((a,b)=>a.date.localeCompare(b.date));
-  const nextSched=upcoming[0]||null;
+
+  // Determine active scheduled counting
+  const active = getActiveScheduled(scheduledDates);
+  const nextSched = active ? active.sd : null;
+  const schedStatus = active ? active.status : null;
+
+  // Future scheduled (next upcoming after today)
+  const futureScheduled = (scheduledDates||[])
+    .filter(sd => !sd.done && sd.date > todayStr())
+    .sort((a,b) => a.date.localeCompare(b.date));
+  const nextFuture = futureScheduled[0] || null;
+
+  // Determine blocking state
+  const hasScheduled = (scheduledDates||[]).filter(sd => !sd.done).length > 0;
+  const isBlocked = hasScheduled && !active;
+
+  const blockReason = isBlocked
+    ? `Não há contagem agendada para hoje. A próxima contagem prevista é *${nextFuture ? `"${nextFuture.label}" em ${fmtDate(nextFuture.date)}` : "sem data definida"}*.`
+    : null;
+
   const total=items.length;
   const item=items[current];
   const isConf=confirmed[item?.id];
   const doneCount=items.filter(i=>confirmed[i.id]).length;
   const allDone=doneCount===total&&total>0;
   const autoLabel=`CONTAGEM ${countings.length+1}`;
+  const label = nextSched?.label || autoLabel;
+  const countDate = nextSched?.date || todayStr();
+
   const doConfirm=()=>{const n=Number(inputVal);if(inputVal===""||isNaN(n)||n<0)return;setCounts(p=>({...p,[item.id]:n}));setConfirmed(p=>({...p,[item.id]:true}));};
   const doNext=()=>{setInputVal("");if(current<total-1)setCurrent(c=>c+1);};
   const doEdit=()=>{setConfirmed(p=>({...p,[item.id]:false}));setInputVal(String(counts[item.id]??""));};
   const goTo=idx=>{setCurrent(idx);setInputVal(confirmed[items[idx].id]?String(counts[items[idx].id]??""):"");};
   const numpad=k=>{if(isConf)return;if(k==="⌫")setInputVal(p=>p.slice(0,-1));else if(k==="✓")doConfirm();else setInputVal(p=>(p===""||p==="0")?String(k):p.length>6?p:p+String(k));};
   const doSend=()=>{
-    const label=nextSched?.label||autoLabel;
     const result=items.map(i=>({...i,counted:counts[i.id]??0}));
-    const counting={id:Date.now(),label,date:todayStr(),items:result};
+    const counting={id:Date.now(),label,date:countDate,items:result};
     onSubmit(counting,nextSched);setSaved(counting);setPhase("done");
     if(whatsapp)setTimeout(()=>sendWA(whatsapp,counting,items),500);
   };
+
   if(!items.length) return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:T.fontBase,padding:24}}>
       <div style={{fontSize:48}}>⚠️</div>
@@ -331,13 +379,66 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
       <button onClick={onBack} style={S.btn(T.accent)}>← Voltar</button>
     </div>
   );
+
+  // Blocked screen
+  if(isBlocked) return (
+    <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:T.fontBase}}>
+      <div style={{width:"100%",maxWidth:380}}>
+        <button onClick={onBack} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs13,marginBottom:20,padding:0}}>← Voltar</button>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{fontSize:52,marginBottom:12}}>🔒</div>
+          <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.red,marginBottom:8}}>CONTAGEM BLOQUEADA</div>
+          <div style={{fontSize:T.fs13,color:T.textMuted,lineHeight:1.7}}>Não há contagem agendada para hoje. Somente é possível realizar contagem nas datas agendadas.</div>
+        </div>
+        {nextFuture&&(
+          <div style={{...S.card({marginBottom:16,background:T.yellow+"0a",border:`1px solid ${T.yellow}30`,padding:"16px"})}}>
+            <div style={{fontSize:T.fs11,fontWeight:700,color:T.yellow,marginBottom:6,textTransform:"uppercase"}}>📅 Próxima contagem agendada</div>
+            <div style={{fontWeight:700,fontSize:T.fs15,color:T.text,marginBottom:4}}>{nextFuture.label}</div>
+            <div style={{fontSize:T.fs13,color:T.yellow}}>
+              {fmtDate(nextFuture.date)} · {(()=>{const d=daysUntil(nextFuture.date);return d===1?"em 1 dia":`em ${d} dias`;})()}
+            </div>
+          </div>
+        )}
+        {whatsapp&&(
+          <div style={{...S.card({marginBottom:12,background:T.green+"08",border:`1px solid ${T.green}25`,padding:"16px"})}}>
+            <div style={{fontSize:T.fs12,color:T.green,fontWeight:700,marginBottom:6}}>📲 Avisar o gerente</div>
+            <div style={{fontSize:T.fs12,color:T.textMuted,marginBottom:10,lineHeight:1.6}}>Se você foi orientado a fazer a contagem hoje e o sistema está bloqueado, envie uma mensagem ao gerente explicando a situação.</div>
+            <button
+              onClick={()=>sendWABlocked(whatsapp, `Não há contagem agendada para hoje (${fmtDate(todayStr())}). O sistema permite contagem apenas nas datas agendadas.${nextFuture?` A próxima contagem prevista é "${nextFuture.label}" em ${fmtDate(nextFuture.date)}.`:" Nenhuma contagem futura cadastrada no sistema."}`, nextFuture)}
+              style={{...S.btn(T.green,true),padding:"11px",fontSize:T.fs13}}>
+              📲 Enviar mensagem ao gerente
+            </button>
+          </div>
+        )}
+        <button onClick={onBack} style={{...S.btn(T.surface,true),border:`1px solid ${T.border}`,color:T.textSub,marginTop:4}}>← Voltar ao início</button>
+      </div>
+    </div>
+  );
+
   if(phase==="start") return (
     <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:T.fontBase,display:"flex",flexDirection:"column"}}>
       <div style={{background:`linear-gradient(135deg,${T.accentDim}33,${T.bg})`,padding:"22px 18px 18px",borderBottom:`1px solid ${T.border}`}}>
         <button onClick={onBack} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs13,marginBottom:10,padding:0}}>← Voltar</button>
         <div style={{fontFamily:T.fontMono,fontSize:T.fs16,fontWeight:700,color:T.accent}}>🧮 ÁREA DO CONTADOR</div>
-        <div style={{fontSize:T.fs13,color:T.yellow,marginTop:4,fontWeight:600}}>{nextSched?nextSched.label:autoLabel}</div>
+        <div style={{fontSize:T.fs13,color:T.yellow,marginTop:4,fontWeight:600}}>{label}</div>
+        {nextSched && (
+          <div style={{marginTop:6,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <span style={{fontSize:T.fs12,color:T.textMuted}}>📅 Data prevista: <b style={{color:T.text}}>{fmtDate(nextSched.date)}</b></span>
+            {schedStatus==="overdue"&&<span style={{...S.tag(T.red)}}>ATRASADA</span>}
+            {schedStatus==="today"&&<span style={{...S.tag(T.green)}}>HOJE</span>}
+          </div>
+        )}
       </div>
+      {/* Alert banner */}
+      {nextSched && (
+        <div style={{padding:"10px 18px",background:schedStatus==="overdue"?T.red+"12":T.yellow+"10",borderBottom:`1px solid ${schedStatus==="overdue"?T.red:T.yellow}25`}}>
+          <div style={{fontSize:T.fs13,fontWeight:600,color:schedStatus==="overdue"?T.red:T.yellow}}>
+            {schedStatus==="overdue"
+              ? `⚠️ Esta contagem deveria ter sido realizada em ${fmtDate(nextSched.date)}. Realize agora para regularizar.`
+              : `📋 Contagem agendada para hoje — realize assim que possível.`}
+          </div>
+        </div>
+      )}
       <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
         <div style={{width:"100%",maxWidth:380}}>
           <div style={{...S.card({marginBottom:20,background:T.accent+"0a",border:`1px solid ${T.accent}20`,padding:"20px"})}}>
@@ -354,6 +455,7 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
       </div>
     </div>
   );
+
   if(phase==="counting") {
     const pct=(doneCount/total)*100;
     const cv=counts[item.id];
@@ -361,10 +463,11 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
     return (
       <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:T.fontBase,display:"flex",flexDirection:"column"}}>
         <div style={{background:`linear-gradient(135deg,${T.accentDim}33,${T.bg})`,padding:"14px 18px 12px",borderBottom:`1px solid ${T.border}`}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
             <button onClick={()=>setPhase("start")} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs13,padding:0}}>← Voltar</button>
-            <span style={{fontFamily:T.fontMono,fontSize:T.fs12,color:T.textSub}}>{doneCount}/{total} cadastrados</span>
+            <span style={{fontFamily:T.fontMono,fontSize:T.fs12,color:T.textSub}}>{doneCount}/{total} confirmados</span>
           </div>
+          <div style={{fontSize:T.fs12,color:T.yellow,fontWeight:600,marginBottom:6}}>{label} · {fmtDate(countDate)}</div>
           <div style={{height:5,background:T.surface,borderRadius:4}}>
             <div style={{height:"100%",width:`${pct}%`,background:`linear-gradient(90deg,${T.accent},${T.green})`,borderRadius:4,transition:"width .4s"}}/>
           </div>
@@ -413,6 +516,7 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
       </div>
     );
   }
+
   return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:0,fontFamily:T.fontBase,padding:24}}>
       <div style={{width:72,height:72,background:`linear-gradient(135deg,${T.green},${T.greenDim})`,borderRadius:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,marginBottom:16}}>✅</div>
@@ -443,7 +547,7 @@ function ManagerPanel({data,onBack}) {
         </div>
       </div>
       <div style={{padding:"18px 16px"}}>
-        {tab===0&&<DashTab items={items} countings={countings}/>}
+        {tab===0&&<DashTab items={items} countings={countings} scheduledDates={scheduledDates}/>}
         {tab===1&&<ItemsTab items={items} setItems={setItems} countings={countings}/>}
         {tab===2&&<CountTab items={items} countings={countings} setCountings={setCountings} scheduledDates={scheduledDates} setScheduledDates={setScheduledDates}/>}
         {tab===3&&<BuyTab items={items} countings={countings}/>}
@@ -453,10 +557,14 @@ function ManagerPanel({data,onBack}) {
   );
 }
 
-function DashTab({items,countings}) {
+function DashTab({items,countings,scheduledDates}) {
+  // Find next pending scheduled counting
+  const today = todayStr();
+  const pendingScheduled = (scheduledDates||[]).filter(sd => !sd.done).sort((a,b)=>a.date.localeCompare(b.date));
+  const nextSched = pendingScheduled[0] || null;
+  const dtn = nextSched ? daysUntil(nextSched.date) : null;
+
   const lastC=countings.length?[...countings].sort((a,b)=>b.date?.localeCompare(a.date))[0]:null;
-  const nd=lastC?addDays(lastC.date,15):null;
-  const dtn=nd?daysUntil(nd):null;
   const lc={};if(lastC)(lastC.items||[]).forEach(ci=>{lc[ci.id]=ci.counted;});
   const vA=items.reduce((s,i)=>s+(Number(i.value||0)*Number(i.acquiredQty||0)),0);
   const vC=items.reduce((s,i)=>s+(Number(i.value||0)*(lc[i.id]??0)),0);
@@ -473,6 +581,11 @@ function DashTab({items,countings}) {
       {sub&&<div style={{fontSize:T.fs10,color:T.textMuted,marginTop:2}}>{sub}</div>}
     </div>
   );
+
+  // Color for next scheduled countdown
+  const schedColor = dtn===null ? T.textSub : dtn < 0 ? T.red : dtn === 0 ? T.yellow : dtn <= 3 ? T.yellow : T.green;
+  const schedLabel = dtn===null ? "—" : dtn < 0 ? `${Math.abs(dtn)} dia${Math.abs(dtn)!==1?"s":""} em atraso` : dtn === 0 ? "HOJE" : `em ${dtn} dia${dtn!==1?"s":""}`;
+
   return (
     <div style={{marginTop:4}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
@@ -484,10 +597,13 @@ function DashTab({items,countings}) {
         <Stat icon="💰" label="Valor Total Contabilizado" value={fmtCur(vC)} sub={lastC?lastC.label:"Sem contagem"} color={vc} small/>
       </div>
       <div style={{marginBottom:10}}>
-        <Stat icon="⏰" label="Próxima Contagem (15 dias após última)"
-          value={dtn===null?"—":dtn===0?"HOJE":dtn<0?`${Math.abs(dtn)} dias em atraso`:`em ${dtn} dia${dtn!==1?"s":""}`}
-          sub={nd?`Prevista: ${fmtDate(nd)}`:""}
-          color={dtn!==null&&dtn<=0?T.red:dtn!==null&&dtn<=3?T.yellow:T.green}/>
+        <div style={S.card({padding:"14px"})}>
+          <div style={{fontSize:T.fs18,marginBottom:4}}>⏰</div>
+          <div style={{fontFamily:T.fontMono,fontSize:T.fs20,fontWeight:700,color:schedColor,lineHeight:1.2}}>{schedLabel}</div>
+          <div style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600,marginTop:3,textTransform:"uppercase",lineHeight:1.4}}>Próxima Contagem Agendada</div>
+          {nextSched&&<div style={{fontSize:T.fs10,color:T.textMuted,marginTop:2}}>{nextSched.label} · {fmtDate(nextSched.date)}</div>}
+          {!nextSched&&<div style={{fontSize:T.fs10,color:T.textMuted,marginTop:2}}>Nenhum agendamento pendente</div>}
+        </div>
       </div>
       {(abMin>0||acMax>0)&&(
         <div style={{...S.card({marginBottom:10,background:T.red+"0a",border:`1px solid ${T.red}30`})}}>
@@ -518,6 +634,29 @@ function DashTab({items,countings}) {
         <Stat icon="💹" label="Diferença em Valor" value={lastC?fmtCur(dV):"—"} color={dV<0?T.red:dV===0?T.green:T.accent} small/>
       </div>
     </div>
+  );
+}
+
+// Currency input with auto-format on blur
+function CurrencyInput({value, onChange, placeholder, style}) {
+  const [raw, setRaw] = useState(value !== "" && value !== undefined ? String(value) : "");
+  useEffect(() => { setRaw(value !== "" && value !== undefined ? String(value) : ""); }, [value]);
+  return (
+    <input
+      type="number"
+      placeholder={placeholder||"0,00"}
+      value={raw}
+      onChange={e => { setRaw(e.target.value); onChange(e.target.value); }}
+      onBlur={() => {
+        const n = parseFloat(raw.replace(",","."));
+        if (!isNaN(n)) {
+          const formatted = n.toFixed(2);
+          setRaw(formatted);
+          onChange(formatted);
+        }
+      }}
+      style={style}
+    />
   );
 }
 
@@ -552,7 +691,15 @@ function ItemsTab({items,setItems,countings}) {
           <div style={S.label}>Unidade</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>{UNITS.map(u=><button key={u} onClick={()=>setForm(p=>({...p,unit:u}))} style={{background:form.unit===u?T.accent:T.surface,border:`1px solid ${form.unit===u?T.accent:T.border}`,borderRadius:8,padding:"6px 12px",color:form.unit===u?"#fff":T.textSub,fontWeight:600,fontSize:T.fs12,cursor:"pointer",fontFamily:T.fontBase}}>{u}</button>)}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-            <div><div style={S.label}>Valor (R$)</div><input type="number" placeholder="0.00" value={form.value} onChange={e=>setForm(p=>({...p,value:e.target.value}))} style={S.input()}/></div>
+            <div>
+              <div style={S.label}>Valor (R$)</div>
+              <CurrencyInput
+                value={form.value}
+                onChange={v=>setForm(p=>({...p,value:v}))}
+                placeholder="0,00"
+                style={S.input()}
+              />
+            </div>
             <div><div style={S.label}>Quantidade adquirida</div><input type="number" placeholder="0" value={form.acquiredQty} onChange={e=>setForm(p=>({...p,acquiredQty:e.target.value}))} style={S.input()}/></div>
           </div>
           <div style={S.label}>Data de aquisição</div>
@@ -618,6 +765,7 @@ function CountTab({items,countings,setCountings,scheduledDates,setScheduledDates
   const [showReport,setShowReport]=useState(false);
   const [repC,setRepC]=useState(null);
   const SUBS=[["history","📋 Histórico"],["schedule","🗓 Agendamentos"],["evolution","📈 Evolução"]];
+  // Sort countings by date descending — ÚLTIMA always the most recent date
   const sorted=[...countings].sort((a,b)=>b.date?.localeCompare(a.date));
   const sortedSch=[...scheduledDates].sort((a,b)=>a.date.localeCompare(b.date));
   if(sel) return (
@@ -651,13 +799,16 @@ function CountTab({items,countings,setCountings,scheduledDates,setScheduledDates
       {subTab==="history"&&(
         <div>
           {sorted.length===0&&<div style={{textAlign:"center",color:T.textMuted,padding:"40px 0",fontSize:T.fs13}}>Nenhuma contagem registrada ainda.</div>}
-          {sorted.map((c,idx)=>{const isExp=expanded[c.id];const ciList=c.items||[];const visible=isExp?ciList:ciList.slice(0,3);return(
+          {sorted.map((c,idx)=>{
+            // "ÚLTIMA" = index 0 in sorted (most recent date)
+            const isLast = idx === 0;
+            const isExp=expanded[c.id];const ciList=c.items||[];const visible=isExp?ciList:ciList.slice(0,3);return(
             <div key={c.id} style={S.card({marginBottom:10})}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
                     <div style={{fontWeight:700,fontSize:T.fs14}}>{c.label}</div>
-                    {idx===0&&<span style={S.tag(T.green)}>ÚLTIMA</span>}
+                    {isLast&&<span style={S.tag(T.green)}>ÚLTIMA</span>}
                   </div>
                   <div style={{fontSize:T.fs12,color:T.textMuted,marginBottom:10}}>{fmtDate(c.date)} · {ciList.length} insumos</div>
                   {visible.map(ci=>(
@@ -693,15 +844,30 @@ function CountTab({items,countings,setCountings,scheduledDates,setScheduledDates
             <button onClick={()=>{if(!schForm.label.trim()||!schForm.date){setSchErr("Preencha o nome e a data.");return;}setScheduledDates(prev=>[...prev,{id:Date.now(),...schForm,done:false}]);setSchForm({label:"",date:""});setSchErr("");}} style={S.btn(T.yellow)}><span style={{color:"#000"}}>Agendar</span></button>
           </div>
           {sortedSch.length===0&&<div style={{textAlign:"center",color:T.textMuted,padding:"30px 0",fontSize:T.fs13}}>Nenhuma contagem agendada.</div>}
-          {sortedSch.map(sd=>{const days=daysUntil(sd.date),ov=days<0&&!sd.done;const color=sd.done?T.green:ov?T.red:days<=2?T.yellow:T.text;return(
+          {sortedSch.map(sd=>{
+            const days=daysUntil(sd.date);
+            const ov=days<0&&!sd.done;
+            const color=sd.done?T.green:ov?T.red:days<=2?T.yellow:T.text;
+            return(
             <div key={sd.id} style={{...S.card({marginBottom:10,border:`1px solid ${color}20`}),display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div><div style={{fontWeight:600,fontSize:T.fs13,color}}>{sd.label}</div><div style={{fontSize:T.fs11,color:T.textMuted,marginTop:2}}>{fmtDate(sd.date)} {sd.done?"· ✅ Concluído":ov?"· ⚠️ ATRASADO":days===0?"· HOJE":`· em ${days} dia${days!==1?"s":""}`}</div></div>
+              <div>
+                <div style={{fontWeight:600,fontSize:T.fs13,color}}>{sd.label}</div>
+                <div style={{fontSize:T.fs11,color:T.textMuted,marginTop:2}}>
+                  {fmtDate(sd.date)}{" "}
+                  {sd.done?"· ✅ Concluído (pelo contador)":ov?"· ⚠️ ATRASADA — aguardando realização":days===0?"· 📋 HOJE":`· em ${days} dia${days!==1?"s":""}`}
+                </div>
+              </div>
               <div style={{display:"flex",gap:6}}>
-                {!sd.done&&<button onClick={()=>setScheduledDates(prev=>prev.map(s=>s.id===sd.id?{...s,done:true}:s))} style={S.btn(T.green,false,true)}>✅</button>}
+                {/* No manual "done" button — completion is automatic when counter submits */}
                 <button onClick={()=>setConfirm({message:`Excluir "${sd.label}"?`,onConfirm:()=>{setScheduledDates(prev=>prev.filter(s=>s.id!==sd.id));setConfirm(null);}})} style={S.btn(T.red,false,true)}>🗑</button>
               </div>
             </div>
           );})}
+          <div style={{...S.card({marginTop:8,background:T.accent+"08",border:`1px solid ${T.accent}20`,padding:"12px 14px"})}}>
+            <div style={{fontSize:T.fs11,color:T.textSub,lineHeight:1.7}}>
+              ℹ️ O status <b style={{color:T.green}}>Concluído</b> é marcado automaticamente quando o contador realiza a contagem naquela data. Contagens <b style={{color:T.red}}>atrasadas</b> ficam disponíveis para o contador realizar e são marcadas como concluídas ao enviar.
+            </div>
+          </div>
         </div>
       )}
       {subTab==="evolution"&&<EvoTab items={items} countings={countings}/>}
