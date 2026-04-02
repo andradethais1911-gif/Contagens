@@ -1,16 +1,23 @@
-import { Redis } from '@upstash/redis';
+const { kv } = require('@vercel/kv');
 
-const redis = Redis.fromEnv();
-
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'GET') {
-    const value = await redis.get(req.query.key);
-    return res.json({ value });
+    try {
+      const value = await kv.get(req.query.key);
+      return res.status(200).json({ value: value ?? null });
+    } catch(e) {
+      return res.status(500).json({ error: e.message });
+    }
   }
   if (req.method === 'POST') {
-    const { key, value } = req.body;
-    await redis.set(key, value);
-    return res.json({ ok: true });
+    try {
+      const { key, value } = req.body;
+      await kv.set(key, value);
+      return res.status(200).json({ ok: true });
+    } catch(e) {
+      return res.status(500).json({ error: e.message });
+    }
   }
   res.status(405).end();
-}
+};
