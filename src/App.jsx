@@ -127,7 +127,7 @@ function ReportModal({counting,items,onClose}) {
     ctx.fillText(`Data: ${fmtDate(counting.date)}`,32,90);
     ctx.fillText(`Gerado: ${new Date().toLocaleString("pt-BR")}`,32,110);
     let y=hH;
-    const cols=[{l:"Insumo",x:32},{l:"Unidade",x:220},{l:"Qtd Contabilizada",x:310},{l:"Mínimo",x:450},{l:"Máximo",x:520},{l:"Status",x:595},{l:"Compra Necessária",x:710}];
+    const cols=[{l:"Insumo",x:32},{l:"Unidade",x:220},{l:"Quantidade Contabilizada",x:310},{l:"Mínimo",x:450},{l:"Máximo",x:520},{l:"Status",x:595},{l:"Compra Necessária",x:710}];
     ctx.fillStyle="#0a1e3c";ctx.fillRect(0,y,W,thH);
     ctx.font="bold 11px Arial";ctx.fillStyle="#bfdbfe";
     cols.forEach(c=>ctx.fillText(c.l,c.x,y+23));
@@ -613,12 +613,12 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
       flexDirection:"column",
       gap:3
     }}>
-      <div style={{fontSize:14,lineHeight:1}}>{icon}</div>
+      <div style={{fontSize:T.fs14,lineHeight:1}}>{icon}</div>
       <div style={{fontFamily:T.fontMono,fontSize:T.fs16,fontWeight:700,color,lineHeight:1.1,marginTop:2}}>{value}</div>
-      <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",lineHeight:1.35,letterSpacing:.3,flex:1}}>{label}</div>
-      {sub&&<div style={{fontSize:9,color:T.textMuted,lineHeight:1.3}}>{sub}</div>}
+      <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",lineHeight:1.35,letterSpacing:.3,flex:1}}>{label}</div>
+      {sub&&<div style={{fontSize:T.fs10,color:T.textMuted,lineHeight:1.3}}>{sub}</div>}
       <div style={{marginTop:4,background:color+"22",borderRadius:4,padding:"2px 6px",alignSelf:"flex-start"}}>
-        <span style={{fontSize:9,color,fontWeight:800,letterSpacing:.5}}>VER →</span>
+        <span style={{fontSize:T.fs10,color,fontWeight:800,letterSpacing:.5}}>VER →</span>
       </div>
     </div>
   );
@@ -643,7 +643,7 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
       {/* STATUS DAS QUANTIDADES */}
       {lastC&&(
         <div style={{marginBottom:8}}>
-          <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>STATUS DAS QUANTIDADES</div>
+          <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Status das quantidades</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
             <Card icon="⬇️" label="ITENS ABAIXO DO MÍNIMO" value={abMin}   sub={lastC?lastC.label:null} color={abMin>0?T.red:T.green}    onClick={()=>onNavigate(1)}/>
             <Card icon="✅" label="ITENS DENTRO DA MARGEM"  value={inRange} sub={lastC?lastC.label:null} color={inRange===items.length?T.green:inRange>0?T.green:T.red} onClick={()=>onNavigate(1)}/>
@@ -654,7 +654,7 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
 
       {/* STATUS DAS CONTAGENS */}
       <div style={{marginBottom:8}}>
-        <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>STATUS DAS CONTAGENS</div>
+        <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Status das contagens</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           <Card
             icon="📋"
@@ -760,14 +760,21 @@ function ItemsTab({items,setItems,countings}) {
                 {(it.min||it.max)&&<div style={{fontSize:T.fs12,color:T.textMuted,marginTop:4}}>{it.min?<span>Mínimo: <b style={{color:T.warm}}>{it.min}</b></span>:""}{it.min&&it.max?" · ":""}{it.max?<span>Máximo: <b style={{color:T.purple}}>{it.max}</b></span>:""}</div>}
                 {(it.purchases||[]).length>0&&(
                   <div style={{marginTop:8,background:T.surface,borderRadius:8,padding:"8px 10px"}}>
-                    <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>📦 Histórico de compras</div>
-                    {(it.purchases||[]).map((p,i)=>(
-                      <div key={i} style={{fontSize:T.fs11,color:T.textSub,display:"flex",justifyContent:"space-between",marginBottom:2,gap:8}}>
-                        <span style={{flexShrink:0}}>{fmtDate(p.date)}</span>
-                        <span style={{fontFamily:T.fontMono,color:T.green,fontWeight:600,flexShrink:0}}>+{p.qty} {it.unit}</span>
-                        {p.note&&<span style={{color:T.textMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.note}</span>}
+                    <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>📦 Histórico de compras</div>
+                    {(it.purchases||[]).map((p,i)=>{
+                      const pc=p.pType==="initial"?T.warm:p.pType==="reposition"?T.purple:T.green;
+                      const plabel=p.pType==="initial"?"Entrada inicial":null;
+                      return(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2,gap:8}}>
+                        <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
+                          <span style={{fontSize:T.fs11,color:pc,fontWeight:600}}>{fmtDate(p.date)}</span>
+                          {plabel&&<span style={{...S.tag(pc),fontSize:T.fs10}}>{plabel}</span>}
+                        </div>
+                        <span style={{fontFamily:T.fontMono,color:pc,fontWeight:600,flexShrink:0,fontSize:T.fs11}}>+{p.qty} {it.unit}</span>
+                        {p.note&&<span style={{color:T.textMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:T.fs11}}>{p.note}</span>}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 {it.attachment?.startsWith("data:image")&&<img src={it.attachment} alt="" style={{width:56,height:56,objectFit:"cover",borderRadius:8,marginTop:8}}/>}
@@ -890,7 +897,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
               </div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:T.fs11,color:T.textMuted}}>
-              {it.value>0&&<span>Valor unit.: <b style={{color:T.yellow}}>{fmtCur(it.value)}</b></span>}
+              {it.value>0&&<span>Valor unitário: <b style={{color:T.yellow}}>{fmtCur(it.value)}</b></span>}
               {it.value>0&&<span>Valor contado: <b style={{color:T.accent}}>{fmtCur(valContado)}</b></span>}
               <span>Total adquirido: <b style={{color:T.text}}>{totalAcq} {it.unit}</b></span>
               {it.value>0&&<span>Valor adquirido: <b style={{color:T.warm}}>{fmtCur(valAcq)}</b></span>}
@@ -1050,16 +1057,16 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
   const getPurchasedQty = (itemId) => (purchases||[]).filter(p=>p.itemId===itemId).reduce((s,p)=>s+Number(p.qty||0),0);
 
   const allSug=items.filter(i=>{
-    if(!lastC) return false; // need a validated counting
-    const counted=lc[i.id]??0;
-    if(i.max&&counted<i.max) return true;   // counted below max → suggest
+    const counted=lc[i.id]??0; // 0 if no validated counting
+    if(i.max&&counted<i.max) return true;
     if(!i.max&&i.min&&counted<i.min) return true;
     return false;
   }).map(i=>{
     const curBase=lc[i.id]??0;
     const alreadyBought=getPurchasedQty(i.id);
     const need=i.max?Math.max(i.max-curBase-alreadyBought,0):Math.max(i.min-curBase-alreadyBought+i.min,0);
-    return{...i,curBase,alreadyBought,cur:curBase+alreadyBought,need,est:Number(i.value||0)*need};
+    const isInitial=!(purchases||[]).some(p=>p.itemId===i.id)&&!(i.purchases||[]).length;
+    return{...i,curBase,alreadyBought,cur:curBase+alreadyBought,need,est:Number(i.value||0)*need,isInitial};
   }).filter(i=>i.need>0);
 
   const [sel,setSel]=useState(()=>Object.fromEntries(allSug.map(i=>[i.id,true])));
@@ -1096,12 +1103,15 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
         return {...it,purchases:(it.purchases||[]).map(p=>p.id===editPurchaseId?{...p,qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName}:p)};
       }));
     } else {
-      // New purchase
-      const purchase={id:Date.now(),itemId:buyModal.id,itemName:buyModal.name,itemValue:Number(buyModal.value||0),qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName};
+      // New purchase — type based on whether item already has purchases
+      const currentItem=items.find(i=>i.id===buyModal.id);
+      const isFirstPurchase=!(currentItem?.purchases||[]).length&&!(purchases||[]).filter(p=>p.itemId===buyModal.id).length;
+      const pType=isFirstPurchase?"initial":"reposition";
+      const purchase={id:Date.now(),itemId:buyModal.id,itemName:buyModal.name,itemValue:Number(buyModal.value||0),qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName,pType};
       setPurchases(prev=>[...(prev||[]),purchase]);
       setItems(prev=>prev.map(it=>{
         if(it.id!==buyModal.id) return it;
-        return {...it,purchases:[...(it.purchases||[]),{id:purchase.id,qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName}]};
+        return {...it,purchases:[...(it.purchases||[]),{id:purchase.id,qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName,pType}]};
       }));
     }
     setBuyModal(null);setEditPurchaseId(null);
@@ -1183,10 +1193,13 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
 
       {subTab==="program"&&(
         <div>
-          {lastC&&<div style={{...S.card({marginBottom:12,background:T.accent+"08",border:`1px solid ${T.border}`,padding:"11px 14px"})}}>
-            <div style={{fontSize:T.fs12,color:T.textMuted}}>Baseado em: <b style={{color:T.text}}>{lastC.label}</b> · {fmtDate(lastC.date)} · Itens abaixo do máximo, descontando compras já registradas.</div>
-          </div>}
-          {!lastC&&<div style={{textAlign:"center",color:T.textMuted,padding:"40px 0",fontSize:T.fs13}}>Realize e valide pelo menos uma contagem para ver sugestões de compra.</div>}
+          <div style={{...S.card({marginBottom:12,background:T.accent+"08",border:`1px solid ${T.border}`,padding:"11px 14px"})}}>
+            <div style={{fontSize:T.fs12,color:T.textMuted,marginBottom:6}}>{lastC?<>Baseado em: <b style={{color:T.text}}>{lastC.label}</b> · {fmtDate(lastC.date)} · Itens abaixo do máximo, descontando compras já registradas.</>:<>Itens abaixo do máximo. Realize contagens para manter as sugestões precisas.</>}</div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              <span style={{fontSize:T.fs10,color:T.warm,fontWeight:600}}>■ Entrada inicial</span>
+              <span style={{fontSize:T.fs10,color:T.purple,fontWeight:600}}>■ Reposição</span>
+            </div>
+          </div>
           {lastC&&allSug.length===0&&<div style={{textAlign:"center",color:T.green,padding:"40px 0",fontWeight:600,fontSize:T.fs14}}>✅ Todos os insumos já atingiram o máximo!<br/><span style={{fontSize:T.fs12,color:T.textMuted,fontWeight:400}}>Incluindo compras já registradas.</span></div>}
           {allSug.length>0&&(
             <>
@@ -1194,32 +1207,38 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
                 <div style={{fontSize:T.fs12,color:T.textMuted}}>{selItems.length} de {allSug.length} itens</div>
                 <button onClick={toggleAll} style={{...S.btn(T.surface,false,true),border:`1px solid ${T.border}`,color:T.textSub,fontSize:T.fs11}}>{allSug.every(i=>sel[i.id])?"Desmarcar todos":"Selecionar todos"}</button>
               </div>
-              {allSug.map(it=>(
-                <div key={it.id} style={{...S.card({marginBottom:10,border:`1px solid ${T.border}`,background:sel[it.id]?T.accent+"06":T.card})}}>
+              {allSug.map(it=>{
+                const typeColor=it.isInitial?T.warm:T.purple;
+                const typeLabel=it.isInitial?"Entrada inicial":"Reposição";
+                return(
+                <div key={it.id} style={{...S.card({marginBottom:10,border:`1px solid ${T.border}`,background:sel[it.id]?T.green+"06":T.card})}}> 
                   <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-                    <div onClick={()=>setSel(p=>({...p,[it.id]:!p[it.id]}))} style={{width:20,height:20,borderRadius:5,border:`2px solid ${sel[it.id]?T.accent:T.textMuted}`,background:sel[it.id]?T.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2,cursor:"pointer"}}>
-                      {sel[it.id]&&<span style={{color:"#fff",fontSize:12,fontWeight:900}}>✓</span>}
+                    <div onClick={()=>setSel(p=>({...p,[it.id]:!p[it.id]}))} style={{width:20,height:20,borderRadius:5,border:`2px solid ${sel[it.id]?T.green:T.textMuted}`,background:sel[it.id]?T.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2,cursor:"pointer"}}>
+                      {sel[it.id]&&<span style={{color:"#fff",fontSize:T.fs12,fontWeight:900}}>✓</span>}
                     </div>
                     <div style={{flex:1}}>
-                      <div style={{fontWeight:700,fontSize:T.fs14,marginBottom:2}}>{it.name}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+                        <div style={{fontWeight:700,fontSize:T.fs14}}>{it.name}</div>
+                        <span style={{...S.tag(typeColor),fontSize:T.fs10}}>{typeLabel}</span>
+                      </div>
                       <div style={{fontSize:T.fs12,color:T.accent,marginBottom:10}}>{it.unit}</div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
                         <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
-                          <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Contado na Última Contagem</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.red}}>{it.curBase}</div>
-                          {it.alreadyBought>0&&<div style={{fontSize:T.fs10,color:T.green}}>+{it.alreadyBought} comprado</div>}
+                          <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,fontWeight:600}}>{it.isInitial?"Quantidade inicial":"Última contagem"}</div>
+                          <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:it.isInitial?T.red:typeColor}}>{it.isInitial?0:it.curBase}</div>
+                          {!it.isInitial&&it.alreadyBought>0&&<div style={{fontSize:T.fs10,color:T.green}}>+{it.alreadyBought} comprado</div>}
                         </div>
                         <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
-                          <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Necessário</div>
+                          <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,fontWeight:600}}>Necessário</div>
                           <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.yellow}}>+{it.need}</div>
                         </div>
                         <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
-                          <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Valor Unitário</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:T.textSub}}>{fmtCur(it.value)}</div>
+                          <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,fontWeight:600}}>Valor unitário</div>
+                          <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:T.yellow}}>{fmtCur(it.value)}</div>
                         </div>
                       </div>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:T.green+"0a",border:`1px solid ${T.border}`,borderRadius:9,padding:"7px 10px",marginBottom:8}}>
-                        <div style={{fontSize:T.fs11,color:T.textMuted,textTransform:"uppercase",fontWeight:600}}>Valor estimado</div>
+                        <div style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600}}>Valor estimado</div>
                         <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.green}}>{fmtCur(it.est)}</div>
                       </div>
                       {(it.min||it.max)&&<div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:8}}>{it.min?<span>Mínimo: <b style={{color:T.warm}}>{it.min}</b></span>:""}{it.min&&it.max?" · ":""}{it.max?<span>Máximo: <b style={{color:T.purple}}>{it.max}</b></span>:""}</div>}
@@ -1227,12 +1246,12 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
               <div style={{...S.card({border:`1px solid ${T.border}`,background:T.yellow+"08"}),display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}>
                 <div style={{fontWeight:700,color:T.yellow,fontSize:T.fs14}}>💰 Total Estimado (selecionados)</div>
                 <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.yellow}}>{fmtCur(totalEst)}</div>
               </div>
-              <div style={{fontSize:T.fs10,color:T.textMuted,marginTop:6}}>* Quantidade contada na última contagem validada</div>
             </>
           )}
         </div>
@@ -1262,7 +1281,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
                     {/* Item header with checkbox */}
                     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
                       <div onClick={()=>toggleHistSel(it.id)} style={{width:20,height:20,borderRadius:5,border:`2px solid ${isSel?T.green:T.textMuted}`,background:isSel?T.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
-                        {isSel&&<span style={{color:"#fff",fontSize:12,fontWeight:900}}>✓</span>}
+                        {isSel&&<span style={{color:"#fff",fontSize:T.fs12,fontWeight:900}}>✓</span>}
                       </div>
                       <div style={{flex:1}}>
                         <div style={{fontWeight:700,fontSize:T.fs14}}>{it.name}</div>
@@ -1274,16 +1293,22 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
                       </div>
                     </div>
                     {/* Individual purchases */}
-                    {ps.map(p=>(
+                    {ps.map(p=>{
+                      const pc=p.pType==="initial"?T.warm:p.pType==="reposition"?T.purple:T.green;
+                      const plabel=p.pType==="initial"?"Entrada inicial":p.pType==="reposition"?"Reposição":null;
+                      return(
                       <div key={p.id} style={{background:T.surface,borderRadius:9,padding:"9px 12px",marginBottom:6}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:p.note?4:0}}>
                           <div>
-                            <div style={{fontSize:T.fs12,color:T.text,fontWeight:600}}>{fmtDate(p.date)}</div>
-                            {p.note&&<div style={{fontSize:T.fs11,color:T.textMuted}}>📝 {p.note}</div>}
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <span style={{fontSize:T.fs12,color:pc,fontWeight:600}}>{fmtDate(p.date)}</span>
+                              {plabel&&<span style={{...S.tag(pc),fontSize:T.fs10}}>{plabel}</span>}
+                            </div>
+                            {p.note&&<div style={{fontSize:T.fs11,color:T.textMuted,marginTop:2}}>📝 {p.note}</div>}
                           </div>
                           <div style={{display:"flex",alignItems:"center",gap:8}}>
                             <div style={{textAlign:"right"}}>
-                              <div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color:T.green}}>+{p.qty}</div>
+                              <div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color:pc}}>+{p.qty}</div>
                               <div style={{fontSize:T.fs10,color:T.textMuted}}>{fmtCur(Number(p.qty)*Number(p.itemValue||it.value||0))}</div>
                             </div>
                             <div style={{display:"flex",gap:4}}>
@@ -1295,10 +1320,10 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
                         {p.attachment?.startsWith("data:image")&&<img src={p.attachment} alt="" style={{width:"100%",maxHeight:80,objectFit:"cover",borderRadius:7,marginTop:6}}/>}
                         {p.attachmentName&&!p.attachment?.startsWith("data:image")&&<div style={{fontSize:T.fs10,color:T.purple,marginTop:4}}>📎 {p.attachmentName}</div>}
                       </div>
-                    ))}
+                    );})}
                     {/* Item subtotal */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:T.green+"08",borderRadius:8,padding:"7px 10px",marginTop:4}}>
-                      <span style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600,textTransform:"uppercase"}}>Subtotal do insumo</span>
+                      <span style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600}}>Subtotal do insumo</span>
                       <span style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.green}}>{fmtCur(totalVal)}</span>
                     </div>
                   </div>
@@ -1396,21 +1421,21 @@ function EvoTab({items,countings,purchases}) {
           <div style={{...S.card({marginBottom:14,padding:"14px 16px",border:`1px solid ${T.border}`})}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
             <div style={{fontSize:T.fs12,fontWeight:700,color:T.text}}>⚖️ Última Contagem — Total Adquirido</div>
-            {si.value>0&&<div style={{fontSize:T.fs11,color:T.textMuted}}>Valor unit.: <b style={{color:T.yellow}}>{fmtCur(si.value)}</b></div>}
+            {si.value>0&&<div style={{fontSize:T.fs11,color:T.textMuted}}>Valor unitário: <b style={{color:T.yellow}}>{fmtCur(si.value)}</b></div>}
           </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
               <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
-                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Total Adquirido</div>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>Total adquirido</div>
                 <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.accent}}>{totalAcquired}</div>
                 <div style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</div>
               </div>
               <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
-                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Última Contagem</div>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>Última contagem</div>
                 <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:diff===null?T.textSub:lastCountedQty<totalAcquired?T.red:lastCountedQty===totalAcquired?T.green:T.purple}}>{lastCounting?lastCountedQty:"—"}</div>
                 <div style={{fontSize:T.fs10,color:T.textMuted}}>{lastCounting?fmtDate(lastCounting.date):"Sem contagem"}</div>
               </div>
               <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
-                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Diferença</div>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>Diferença</div>
                 <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:diff===null?T.textSub:diff===0?T.green:diff>0?T.purple:T.red}}>
                   {diff===null?"—":diff>0?`+${diff}`:String(diff)}
                 </div>
@@ -1420,15 +1445,15 @@ function EvoTab({items,countings,purchases}) {
             {si.value>0&&(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                 <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
-                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>Valor Adquirido</div>
+                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:2}}>Valor adquirido</div>
                   <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:T.accent}}>{fmtCur(Number(si.value)*totalAcquired)}</div>
                 </div>
                 <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
-                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>Valor Contado</div>
+                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:2}}>Valor contado</div>
                   <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:diff===null?T.textSub:lastCountedQty<totalAcquired?T.red:lastCountedQty===totalAcquired?T.green:T.purple}}>{lastCounting?fmtCur(Number(si.value)*lastCountedQty):"—"}</div>
                 </div>
                 <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
-                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>Diferença em Valor</div>
+                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:2}}>Diferença em valor</div>
                   <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:diff===null?T.textSub:diff===0?T.green:diff>0?T.purple:T.red}}>{diff===null?"—":fmtCur(Number(si.value)*diff)}</div>
                 </div>
               </div>
@@ -1453,16 +1478,16 @@ function EvoTab({items,countings,purchases}) {
                     <div key={i}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                         <div style={{display:"flex",alignItems:"center",gap:6,flex:1,paddingRight:8,overflow:"hidden"}}>
-                          <span style={{fontSize:9,color:isPurch?T.warm:T.accent,fontWeight:700,flexShrink:0}}>{isPurch?"💰":"📋"}</span>
+                          <span style={{fontSize:T.fs10,color:isPurch?T.warm:T.accent,fontWeight:700,flexShrink:0}}>{isPurch?"💰":"📋"}</span>
                           <span style={{fontSize:T.fs11,color:T.text,fontWeight:isPurch?600:400,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.label}</span>
-                          {d.date&&<span style={{color:T.textMuted,fontSize:9,flexShrink:0}}>· {fmtDate(d.date)}</span>}
+                          {d.date&&<span style={{color:T.textMuted,fontSize:T.fs10,flexShrink:0}}>· {fmtDate(d.date)}</span>}
                         </div>
-                        <span style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:bc,flexShrink:0,opacity:isPurch||isValidated?1:0.5}}>{d.qty} <span style={{fontSize:9,color:T.textMuted}}>{si.unit}</span></span>
+                        <span style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:bc,flexShrink:0,opacity:isPurch||isValidated?1:0.5}}>{d.qty} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></span>
                       </div>
                       <div style={{position:"relative",height:14,background:T.surface,borderRadius:4,overflow:"hidden"}}>
                         <div style={{height:"100%",width:`${pct}%`,background:bc,borderRadius:4,transition:"width .5s",opacity}}/>
                       </div>
-                      {!isPurch&&!isValidated&&<div style={{fontSize:9,color:T.yellow,marginTop:2}}>⏳ Pendente de validação</div>}
+                      {!isPurch&&!isValidated&&<div style={{fontSize:T.fs10,color:T.yellow,marginTop:2}}>⏳ Pendente de validação</div>}
                     </div>
                   );
                 })}
@@ -1481,7 +1506,7 @@ function EvoTab({items,countings,purchases}) {
                 <table style={{width:"100%",borderCollapse:"collapse",minWidth:320}}>
                   <thead>
                     <tr style={{background:T.surface}}>
-                      {["Tipo","Data","Qtd / Valor","Diferença (vs Adquirido)"].map((h,i)=>(
+                      {["Tipo","Data","Quantidade / Valor","Diferença (vs Adquirido)"].map((h,i)=>(
                         <th key={i} style={{padding:"7px 8px",textAlign:"left",color:T.textMuted,fontWeight:600,fontSize:T.fs11,whiteSpace:"nowrap"}}>{h}</th>
                       ))}
                     </tr>
@@ -1617,7 +1642,7 @@ function InstructionsTab() {
 
       {sub==="gerente"&&(
         <div>
-          <Acc id="dashboard" title="📊 Aba Dashboard" color={T.accent}>
+          <Acc id="dashboard" title="📊 Aba Dashboard" color={T.warm}>
             <P>Visão geral do estoque em tempo real. Todos os cards são clicáveis e levam diretamente à tela correspondente.</P>
             <Li>Os cards de quantidade mostram insumos cadastrados, contabilizados e a diferença — com referência à última contagem.</Li>
             <Li>Os cards de valor comparam o total adquirido com o valor contabilizado na última contagem.</Li>
@@ -1625,7 +1650,7 @@ function InstructionsTab() {
             <Li>Status das Quantidades e Status das Contagens resumem o cenário do estoque em 6 cards objetivos, sempre baseados na última contagem registrada.</Li>
           </Acc>
 
-          <Acc id="insumos" title="📦 Aba Insumos" color={T.green}>
+          <Acc id="insumos" title="📦 Aba Insumos" color={T.warm}>
             <P>Ponto de partida de tudo. Aqui você registra cada item que compõe o estoque — toalhas, roupões etc.</P>
             <Li>Informe o <HL>nome</HL> (em maiúsculas), a <HL>unidade</HL> de medida, o <HL>valor unitário</HL>, a quantidade <HL color={T.warm}>mínima</HL> e a <HL color={T.purple}>máxima</HL>.</Li>
             <Li>O <HL color={T.warm}>mínimo</HL> é o piso de alerta — abaixo dele, o item aparece em vermelho no dashboard e nas contagens. O <HL color={T.purple}>máximo</HL> é o nível ideal de abastecimento que a programação de compras usa como meta.</Li>
@@ -1633,7 +1658,7 @@ function InstructionsTab() {
             <Tip text="⚠️ Sem mínimo e máximo definidos, o sistema não consegue sugerir compras nem alertar sobre estoque crítico." color={T.yellow}/>
           </Acc>
 
-          <Acc id="contagens" title="📋 Aba Contagens" color={T.accent}>
+          <Acc id="contagens" title="📋 Aba Contagens" color={T.warm}>
             <P>Dividida em três seções acessíveis pelas abas internas.</P>
             <Li><HL>Histórico</HL> — lista todas as contagens registradas. Clique em qualquer uma para ver o detalhamento completo: quantidades contadas, valor unitário, valor total contado, total adquirido, mínimo e máximo de cada insumo.</Li>
             <Li><HL>Agendamentos</HL> — crie agendamentos com nome e data. Somente na data agendada (ou em datas que já passaram sem realização) o contador consegue acessar a contagem. Ao reprovar, um agendamento de recontagem é criado automaticamente.</Li>
@@ -1674,7 +1699,7 @@ function InstructionsTab() {
             <Tip text="⚠️ A contagem só é salva no sistema após tocar em Enviar. Não feche o aplicativo antes de concluir esse passo." color={T.red}/>
           </Acc>
 
-          <Acc id="aposenvio" title="O que acontece após o envio?" color={T.green}>
+          <Acc id="aposenvio" title="O que acontece após o envio?" color={T.accent}>
             <P>Após o envio, a contagem fica com status <HL color={T.yellow}>Pendente</HL> até que o gerente a analise.</P>
             <Li>Se o gerente <HL color={T.green}>validar</HL>, os valores contados passam a ser o estoque oficial e o agendamento é concluído.</Li>
             <Li>Se o gerente <HL color={T.red}>reprovar</HL>, um novo agendamento de <HL>Recontagem</HL> é criado automaticamente para o mesmo dia, com prazo de até 48 horas para realização.</Li>
