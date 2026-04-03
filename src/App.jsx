@@ -38,10 +38,12 @@ const T = {
   bg:"#080d14", surface:"#0f1621", card:"#111827", border:"#1e2d42",
   accent:"#3b82f6", accentDim:"#1d4ed8", warm:"#f97316", warmDim:"#c2410c",
   green:"#22c55e", greenDim:"#15803d", red:"#ef4444", yellow:"#eab308", purple:"#8b5cf6",
-  text:"#f1f5f9", textSub:"#94a3b8", textMuted:"#475569",
+  text:"#f1f5f9", textSub:"#94a3b8", textMuted:"#64748b",
   fontBase:"'Inter',sans-serif", fontMono:"'JetBrains Mono',monospace",
   fs10:10,fs11:11,fs12:12,fs13:13,fs14:14,fs15:15,fs16:16,fs18:18,fs20:20,fs24:24
 };
+
+
 
 const daysUntil = s => { const n=new Date();n.setHours(0,0,0,0);const d=new Date(s+"T00:00:00");d.setHours(0,0,0,0);return Math.round((d-n)/86400000); };
 const fmtDate = s => { if(!s)return"—";const[y,m,d]=s.split("-");return`${d}/${m}/${y}`; };
@@ -78,11 +80,31 @@ function getCurrentQty(item, lastCountingItems) {
 }
 
 const S = {
-  card: (x={}) => ({background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",...x}),
-  btn:  (bg=T.accent,full=false,sm=false) => ({background:bg,border:"none",borderRadius:sm?8:10,padding:sm?"7px 12px":"10px 16px",color:bg===T.yellow?"#000":"#fff",fontWeight:600,fontSize:sm?T.fs11:T.fs13,cursor:"pointer",fontFamily:T.fontBase,width:full?"100%":"auto",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6}),
-  input:(x={}) => ({width:"100%",background:T.surface,border:`1.5px solid ${T.border}`,borderRadius:10,padding:"10px 13px",color:T.text,fontSize:T.fs13,outline:"none",boxSizing:"border-box",fontFamily:T.fontBase,...x}),
-  label:{fontSize:T.fs11,color:T.textSub,marginBottom:5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"},
-  tag:  color=>({display:"inline-flex",alignItems:"center",padding:"2px 8px",borderRadius:5,fontSize:T.fs10,fontWeight:700,background:color+"1a",color,fontFamily:T.fontMono,border:`1px solid ${color}33`}),
+  // Cards com profundidade sutil — borda fina + sombra interna suave
+  card: (x={}) => ({background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 16px",...x}),
+  // Botões com gradiente sutil e sombra colorida
+  btn:  (bg=T.accent,full=false,sm=false) => ({
+    background:bg,
+    border:"none",
+    borderRadius:sm?9:11,
+    padding:sm?"7px 14px":"10px 18px",
+    color:"#fff",
+    fontWeight:700,
+    fontSize:sm?T.fs11:T.fs13,
+    cursor:"pointer",
+    fontFamily:T.fontBase,
+    width:full?"100%":"auto",
+    display:"inline-flex",
+    alignItems:"center",
+    justifyContent:"center",
+    gap:6,
+    letterSpacing:.2
+  }),
+  // Inputs com foco suave
+  input:(x={}) => ({width:"100%",background:T.surface,border:`1.5px solid ${T.border}`,borderRadius:11,padding:"10px 13px",color:T.text,fontSize:T.fs13,outline:"none",boxSizing:"border-box",fontFamily:T.fontBase,...x}),
+  label:{fontSize:T.fs11,color:T.textSub,marginBottom:5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"},
+  // Tags com brilho de borda
+  tag:  color=>({display:"inline-flex",alignItems:"center",padding:"2px 9px",borderRadius:6,fontSize:T.fs10,fontWeight:700,background:color+"18",color,fontFamily:T.fontMono,border:`1px solid ${color}33`}),
   mono: {fontFamily:"'JetBrains Mono',monospace"},
   sec:  {fontSize:T.fs14,fontWeight:700,color:T.text,marginBottom:14}
 };
@@ -180,7 +202,7 @@ function ReportModal({counting,items,onClose}) {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:`1px solid ${T.border}`}}>
           <div style={{fontWeight:700,fontSize:T.fs13,color:T.text}}>📄 {counting.label}</div>
           <div style={{display:"flex",gap:8}}>
-            {rendered&&<button onClick={download} style={{background:T.warm,border:"none",borderRadius:8,padding:"7px 14px",color:"#fff",fontWeight:700,fontSize:T.fs12,cursor:"pointer"}}>⬇ Salvar PNG</button>}
+            {rendered&&<button onClick={download} style={{background:T.warm,border:"none",borderRadius:8,padding:"7px 14px",color:"#fff",fontWeight:700,fontSize:T.fs12,cursor:"pointer"}}>Salvar PNG</button>}
             <button onClick={onClose} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",color:T.textSub,fontWeight:600,fontSize:T.fs12,cursor:"pointer"}}>✕</button>
           </div>
         </div>
@@ -229,11 +251,17 @@ function useAppData() {
   const [state,setState] = useState({items:[],countings:[],scheduledDates:[],appPass:null,passHint:null,whatsapp:null,purchases:[]});
   const [loading,setLoading] = useState(true);
   const reload = useCallback(async()=>{
-    const [items,countings,scheduledDates,appPass,passHint,whatsapp,purchases] = await Promise.all([
-      DB.get("items_v2"),DB.get("countings_v2"),DB.get("scheduledDates"),DB.get("appPass"),DB.get("passHint"),DB.get("whatsapp"),DB.get("purchases_v1")
-    ]);
-    setState({items:items||[],countings:countings||[],scheduledDates:scheduledDates||[],appPass:appPass||DEFAULT_PASS,passHint:passHint||null,whatsapp:whatsapp||null,purchases:purchases||[]});
-    setLoading(false);
+    try {
+      const [items,countings,scheduledDates,appPass,passHint,whatsapp,purchases] = await Promise.all([
+        DB.get("items_v2"),DB.get("countings_v2"),DB.get("scheduledDates"),DB.get("appPass"),DB.get("passHint"),DB.get("whatsapp"),DB.get("purchases_v1")
+      ]);
+      setState({items:items||[],countings:countings||[],scheduledDates:scheduledDates||[],appPass:appPass||DEFAULT_PASS,passHint:passHint||null,whatsapp:whatsapp||null,purchases:purchases||[]});
+    } catch(e) {
+      // Network error — use empty defaults so app still renders
+      setState(p=>({...p,appPass:p.appPass||DEFAULT_PASS}));
+    } finally {
+      setLoading(false);
+    }
   },[]);
   useEffect(()=>{injectFonts();reload();},[reload]);
   const save=(key,fn,dbKey)=>setState(prev=>{const next=typeof fn==="function"?fn(prev[key]):fn;DB.set(dbKey||key,next);return{...prev,[key]:next};});
@@ -262,36 +290,53 @@ function getActiveScheduled(scheduledDates) {
 function HomeScreen({onManager,onCounter,scheduledDates}) {
   const upcoming=(scheduledDates||[]).filter(sd=>!sd.done&&daysUntil(sd.date)>=0&&daysUntil(sd.date)<=7).sort((a,b)=>a.date.localeCompare(b.date));
   const active = getActiveScheduled(scheduledDates);
+  // Theme-aware decorative colors
+  const glowA = `${T.accent}09`;
+  const glowB = `${T.warm}07`;
+  const cardBg = `linear-gradient(135deg,${T.accentDim}22,${T.accent}11)`;
+  const cardBgW = `linear-gradient(135deg,${T.warmDim}22,${T.warm}11)`;
   return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:T.fontBase,position:"relative",overflow:"hidden"}}>
+      {/* Decorative blobs */}
       <div style={{position:"absolute",inset:0,pointerEvents:"none"}}>
-        <div style={{position:"absolute",top:"-15%",left:"-25%",width:500,height:500,borderRadius:"50%",background:`radial-gradient(circle,${T.accent}09 0%,transparent 65%)`}}/>
-        <div style={{position:"absolute",bottom:"-10%",right:"-20%",width:400,height:400,borderRadius:"50%",background:`radial-gradient(circle,${T.warm}07 0%,transparent 65%)`}}/>
+        <div style={{position:"absolute",top:"-15%",left:"-25%",width:500,height:500,borderRadius:"50%",background:`radial-gradient(circle,${glowA} 0%,transparent 65%)`}}/>
+        <div style={{position:"absolute",bottom:"-10%",right:"-20%",width:400,height:400,borderRadius:"50%",background:`radial-gradient(circle,${glowB} 0%,transparent 65%)`}}/>
+
       </div>
       <div style={{position:"relative",width:"100%",maxWidth:380}}>
-        <div style={{textAlign:"center"}}>
-          <div style={{width:64,height:64,background:`linear-gradient(135deg,${T.accent},${T.accentDim})`,borderRadius:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,margin:"0 auto 16px",boxShadow:`0 8px 24px ${T.accent}30`}}>🏠</div>
-          <div style={{fontFamily:T.fontMono,fontSize:T.fs24,fontWeight:700,color:"#ffffff",letterSpacing:2,marginBottom:16}}>GESTÃO DE CONTAGENS</div>
+
+        {/* Logo + title */}
+        <div style={{textAlign:"center",paddingTop:8,marginBottom:28}}>
+          <div style={{width:72,height:72,background:`linear-gradient(135deg,${T.accent},${T.accentDim})`,borderRadius:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:32,margin:"0 auto 18px"}}>🏠</div>
+          <div style={{fontFamily:T.fontMono,fontSize:T.fs24,fontWeight:700,color:T.text,letterSpacing:2,marginBottom:4}}>GESTÃO DE CONTAGENS</div>
+          <div style={{fontSize:T.fs12,color:T.textMuted,letterSpacing:.5}}>Sistema de controle de estoque</div>
         </div>
+        {/* Upcoming countings */}
         {upcoming.length>0&&(
-          <div style={{...S.card({marginBottom:16,background:T.yellow+"0d",border:`1px solid ${T.border}`})}}>
-            <div style={{fontSize:T.fs11,fontWeight:700,color:T.yellow,marginBottom:8,textTransform:"uppercase"}}>⏰ Próximas Contagens</div>
-            {upcoming.map(sd=>{const d=daysUntil(sd.date);return<div key={sd.id} style={{fontSize:T.fs13,color:T.text,marginBottom:4}}><span style={{color:T.yellow,fontWeight:600}}>{sd.label}</span> — {d===0?"HOJE":`em ${d} dia${d!==1?"s":""}`} <span style={{color:T.textMuted}}>({fmtDate(sd.date)})</span></div>;})}
+          <div style={{background:T.yellow+"0d",border:`1px solid ${T.yellow}30`,borderRadius:12,padding:"12px 14px",marginBottom:16}}>
+            <div style={{fontSize:T.fs11,fontWeight:700,color:T.yellow,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>⏰ Próximas contagens</div>
+            {upcoming.map(sd=>{const d=daysUntil(sd.date);return<div key={sd.id} style={{fontSize:T.fs12,color:T.text,marginBottom:3}}><span style={{color:T.yellow,fontWeight:700}}>{sd.label}</span> <span style={{color:T.textMuted}}>— {d===0?"HOJE":`em ${d} dia${d!==1?"s":""}`} ({fmtDate(sd.date)})</span></div>;})}
           </div>
         )}
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <button onClick={onCounter} style={{background:`linear-gradient(135deg,${T.accentDim}22,${T.accent}11)`,border:`1.5px solid ${T.accent}35`,borderRadius:14,padding:"20px",cursor:"pointer",fontFamily:T.fontBase,display:"flex",alignItems:"center",gap:14,textAlign:"left",width:"100%"}}>
-            <div style={{width:48,height:48,background:`linear-gradient(135deg,${T.accent},${T.accentDim})`,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>🧮</div>
-            <div>
-              <div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color:T.accent,letterSpacing:1}}>ÁREA DO CONTADOR</div>
-              <div style={{fontSize:T.fs12,color:T.textMuted,marginTop:3}}>
+        {/* Area buttons */}
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <button onClick={onCounter} style={{background:cardBg,border:`1px solid ${T.accent}30`,borderRadius:18,padding:"20px",cursor:"pointer",fontFamily:T.fontBase,display:"flex",alignItems:"center",gap:16,textAlign:"left",width:"100%"}}>
+            <div style={{width:52,height:52,background:`linear-gradient(135deg,${T.accent},${T.accentDim})`,borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>🧮</div>
+            <div style={{flex:1}}>
+              <div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color:T.accent,letterSpacing:1,marginBottom:4}}>ÁREA DO CONTADOR</div>
+              <div style={{fontSize:T.fs12,color:T.textMuted,lineHeight:1.5}}>
                 {active?(active.status==="today"?`📋 Contagem agendada para HOJE: ${active.sd.label}`:`⚠️ Contagem atrasada: ${active.sd.label} (${fmtDate(active.sd.date)})`):"Acesso livre · Preencha as quantidades"}
               </div>
             </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
-          <button onClick={onManager} style={{background:`linear-gradient(135deg,${T.warmDim}22,${T.warm}11)`,border:`1.5px solid ${T.warm}35`,borderRadius:14,padding:"20px",cursor:"pointer",fontFamily:T.fontBase,display:"flex",alignItems:"center",gap:14,textAlign:"left",width:"100%"}}>
-            <div style={{width:48,height:48,background:`linear-gradient(135deg,${T.warm},${T.warmDim})`,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>🔐</div>
-            <div><div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color:T.warm,letterSpacing:1}}>ÁREA DO GERENTE</div><div style={{fontSize:T.fs12,color:T.textMuted,marginTop:3}}>Acesso protegido por senha</div></div>
+          <button onClick={onManager} style={{background:cardBgW,border:`1px solid ${T.warm}30`,borderRadius:18,padding:"20px",cursor:"pointer",fontFamily:T.fontBase,display:"flex",alignItems:"center",gap:16,textAlign:"left",width:"100%"}}>
+            <div style={{width:52,height:52,background:`linear-gradient(135deg,${T.warm},${T.warmDim})`,borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>🔐</div>
+            <div style={{flex:1}}>
+              <div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color:T.warm,letterSpacing:1,marginBottom:4}}>ÁREA DO GERENTE</div>
+              <div style={{fontSize:T.fs12,color:T.textMuted}}>Acesso protegido por senha</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.warm} strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
       </div>
@@ -314,11 +359,11 @@ function ManagerLogin({onLogin,onBack,appPass,passHint}) {
         <div style={S.card({padding:"20px"})}>
           <div style={S.label}>Senha de acesso</div>
           <div style={{position:"relative",marginBottom:8}}>
-            <input type={show?"text":"password"} placeholder="Digite sua senha" value={pw} onChange={e=>{setPw(e.target.value);setErr("");}} onKeyDown={e=>e.key==="Enter"&&submit()} style={{...S.input({paddingRight:44,fontSize:T.fs14})}}/>
-            <button onClick={()=>setShow(p=>!p)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs14}}>{show?"🙈":"👁"}</button>
+            <input type={show?"text":"password"} placeholder="Digite sua senha" value={pw} onChange={e=>{setPw(e.target.value);setErr("");}} onKeyDown={e=>e.key==="Enter"&&submit()} style={{...S.input({paddingRight:44})}}/>
+            <button onClick={()=>setShow(p=>!p)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs14}}>{show?(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>):(<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>)}</button>
           </div>
           {err&&<div style={{color:T.red,fontSize:T.fs12,marginBottom:10}}>{err}</div>}
-          <button onClick={submit} style={{...S.btn(T.warm,true),padding:"12px",fontSize:T.fs14,marginTop:4}}>Entrar</button>
+          <button onClick={submit} style={{...S.btn(T.warm,true),marginTop:4}}>Entrar</button>
           {passHint&&(
             <div style={{marginTop:14}}>
               <button onClick={()=>setShowHint(p=>!p)} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs12,width:"100%",textDecoration:"underline",fontFamily:T.fontBase}}>{showHint?"Ocultar dica":"Esqueci minha senha"}</button>
@@ -471,7 +516,7 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
         <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:"18px 16px 0",overflowY:"auto"}}>
           <div style={{width:"100%",maxWidth:400}}>
             {/* Item card - NO min/max shown */}
-            <div style={{...S.card({marginBottom:14,textAlign:"center",padding:"24px 20px",border:`1.5px solid ${isConf?T.green:T.accent}30`,background:isConf?T.green+"06":T.accent+"06"})}}>
+            <div style={{...S.card({marginBottom:14,textAlign:"center",padding:"24px 20px",border:`1.5px solid ${isConf?T.green:T.accent}40`,background:isConf?T.green+"08":T.accent+"08",boxShadow:`0 0 0 1px ${isConf?T.green:T.accent}15,0 4px 16px rgba(0,0,0,.3)`})}}>
               <div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:6,fontFamily:T.fontMono,letterSpacing:1,textTransform:"uppercase"}}>Insumo {current+1} de {total}</div>
               <div style={{fontSize:T.fs24,fontWeight:800,color:T.text,lineHeight:1.2,marginBottom:10}}>{item.name}</div>
               <span style={{display:"inline-flex",alignItems:"center",background:T.accent+"18",border:`1px solid ${T.accent}30`,borderRadius:20,padding:"4px 14px",fontSize:T.fs12,color:T.accent,fontWeight:600}}>{item.unit||"Unidade(s)"}</span>
@@ -483,7 +528,7 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
                   <div style={{fontFamily:T.fontMono,fontSize:52,fontWeight:700,color:T.green}}>{counts[item.id]}</div>
                   <div style={{fontSize:T.fs12,color:T.textMuted,marginTop:2}}>{item.unit||"Unidade(s)"}</div>
                 </div>
-                <div style={{display:"flex",justifyContent:"center",marginTop:12}}><button onClick={doEdit} style={{...S.btn(T.textMuted),padding:"6px 14px",fontSize:T.fs12}}>✏️ Editar</button></div>
+                <div style={{display:"flex",justifyContent:"center",marginTop:12}}><button onClick={doEdit} style={{...S.btn(T.textMuted),padding:"6px 14px",fontSize:T.fs12}}>Editar</button></div>
               </div>
             ):(
               <div style={{marginBottom:14}}>
@@ -555,9 +600,9 @@ function ManagerPanel({data,onBack}) {
       <div style={{background:`linear-gradient(135deg,${T.warmDim}22,${T.bg})`,borderBottom:`1px solid ${T.border}`}}>
         <div style={{padding:"20px 18px 0"}}>
         <button onClick={onBack} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs13,marginBottom:10,padding:0}}>← Sair</button>
-        <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.warm,marginBottom:12}}>🔐 PAINEL DO GERENTE</div>
+        <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.warm,marginBottom:12,letterSpacing:1}}>🔐 PAINEL DO GERENTE</div>
         <div style={{display:"flex",gap:2,overflowX:"auto"}}>
-          {TABS.map((t,i)=><button key={i} onClick={()=>setTab(i)} style={{background:tab===i?T.warm:"transparent",border:`1px solid ${tab===i?T.warm:T.border}`,borderBottom:tab===i?"none":"1px solid transparent",borderRadius:"10px 10px 0 0",padding:"8px 10px",color:tab===i?"#000":T.textMuted,fontWeight:600,fontSize:T.fs11,cursor:"pointer",fontFamily:T.fontBase,whiteSpace:"nowrap"}}>{t}</button>)}
+          {TABS.map((t,i)=><button key={i} onClick={()=>setTab(i)} style={{background:tab===i?T.warm:"transparent",border:`1px solid ${tab===i?T.warm:T.border}`,borderBottom:tab===i?"none":"1px solid transparent",borderRadius:"10px 10px 0 0",padding:"8px 10px",color:tab===i?"#fff":T.textMuted,fontWeight:600,fontSize:T.fs11,cursor:"pointer",fontFamily:T.fontBase,whiteSpace:"nowrap"}}>{t}</button>)}
         </div>
         </div>
       </div>
@@ -575,6 +620,7 @@ function ManagerPanel({data,onBack}) {
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 function DashTab({items,countings,scheduledDates,onNavigate}) {
+  const [view,setView]=useState("cards"); // "cards" | "charts"
   const sortedCountings=[...countings].sort((a,b)=>Number(b.id||0)-Number(a.id||0));
   const lastC=sortedCountings[0]||null;
   const lc={};if(lastC)(lastC.items||[]).forEach(ci=>{lc[ci.id]=ci.counted;});
@@ -602,42 +648,165 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
   const colorDiffVal = !lastC ? T.textSub : dV>=0 ? T.green : T.red;
   const colorPendingVal = countingsPendingVal===0 ? T.green : T.red;
 
-  const Card=({icon,value,label,sub,color,onClick=null})=>(
+  const Card=({icon,value,label,sub,color,onClick=null})=>{
+    const isEmpty = value==="—";
+    return(
     <div onClick={onClick||undefined} style={{
       background:T.card,
       border:`1px solid ${T.border}`,
-      borderRadius:12,
+      borderRadius:14,
       padding:"11px 9px",
       cursor:onClick?"pointer":"default",
       display:"flex",
       flexDirection:"column",
-      gap:3
+      gap:3,
     }}>
       <div style={{fontSize:T.fs14,lineHeight:1}}>{icon}</div>
-      <div style={{fontFamily:T.fontMono,fontSize:T.fs16,fontWeight:700,color,lineHeight:1.1,marginTop:2}}>{value}</div>
+      <div style={{fontFamily:T.fontMono,fontSize:T.fs16,fontWeight:700,color:isEmpty?T.textMuted:color,lineHeight:1.1,marginTop:2}}>{value}</div>
       <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",lineHeight:1.35,letterSpacing:.3,flex:1}}>{label}</div>
       {sub&&<div style={{fontSize:T.fs10,color:T.textMuted,lineHeight:1.3}}>{sub}</div>}
-      <div style={{marginTop:4,background:color+"22",borderRadius:4,padding:"2px 6px",alignSelf:"flex-start"}}>
-        <span style={{fontSize:T.fs10,color,fontWeight:800,letterSpacing:.5}}>VER →</span>
+      <div style={{marginTop:4,background:isEmpty?T.textMuted+"18":color+"22",borderRadius:4,padding:"2px 6px",alignSelf:"flex-start"}}>
+        <span style={{fontSize:T.fs10,color:isEmpty?T.textMuted:color,fontWeight:800,letterSpacing:.5}}>VER →</span>
       </div>
     </div>
-  );
+  );};
+
+  // Donut chart — pure SVG, handles empty slices, big % labels
+  const PieChart=({slices,size=140})=>{
+    // Filter out empty slices — use gray ring if all empty
+    const active=slices.filter(sl=>sl.value>0&&!sl.empty);
+    const cx=size/2,cy=size/2,R=size/2-6,r=R*0.46;
+    if(active.length===0) return(
+      <svg width={size} height={size}>
+        <circle cx={cx} cy={cy} r={R} fill="none" stroke={T.border} strokeWidth={R-r+2}/>
+        <text x={cx} y={cy+6} textAnchor="middle" fontSize={T.fs16} fontWeight="700" fill={T.textMuted} fontFamily={T.fontMono}>—</text>
+      </svg>
+    );
+    let cum=0;
+    const total=active.reduce((s,x)=>s+x.value,0);
+    const paths=active.map((sl,i)=>{
+      const pct=sl.value/total;
+      const start=cum; cum+=pct;
+      const a1=start*2*Math.PI-Math.PI/2;
+      const a2=cum*2*Math.PI-Math.PI/2;
+      const lg=pct>0.5?1:0;
+      const ox1=cx+R*Math.cos(a1),oy1=cy+R*Math.sin(a1);
+      const ox2=cx+R*Math.cos(a2),oy2=cy+R*Math.sin(a2);
+      const ix1=cx+r*Math.cos(a2),iy1=cy+r*Math.sin(a2);
+      const ix2=cx+r*Math.cos(a1),iy2=cy+r*Math.sin(a1);
+      const d=`M${ox1},${oy1} A${R},${R} 0 ${lg},1 ${ox2},${oy2} L${ix1},${iy1} A${r},${r} 0 ${lg},0 ${ix2},${iy2} Z`;
+      const midA=(start+pct/2)*2*Math.PI-Math.PI/2;
+      const labelR=(R+r)/2;
+      const lx=cx+labelR*Math.cos(midA),ly=cy+labelR*Math.sin(midA);
+      // Only show % if slice is big enough — font size matches card value (T.fs16)
+      const pctLabel=pct>0.10?`${Math.round(pct*100)}%`:null;
+      return(
+        <g key={i}>
+          <path d={pct>=1?`M${cx},${cy-R} A${R},${R} 0 1,1 ${cx-0.001},${cy-R} L${cx},${cy-r} A${r},${r} 0 1,0 ${cx+0.001},${cy-r} Z`:d} fill={sl.color}/>
+          {pctLabel&&<text x={lx} y={ly+5.5} textAnchor="middle" fontSize={T.fs16} fontWeight="700" fill="#fff" fontFamily={T.fontMono}>{pctLabel}</text>}
+        </g>
+      );
+    });
+    return <svg width={size} height={size}>{paths}</svg>;
+  };
 
   return (
     <div style={{marginTop:4}}>
+      {/* View toggle */}
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
+        <div style={{display:"flex",gap:2,background:T.surface,borderRadius:8,padding:2,border:`1px solid ${T.border}`}}>
+          <button onClick={()=>setView("cards")} style={{background:view==="cards"?T.card:"transparent",border:view==="cards"?`1px solid ${T.border}`:"1px solid transparent",borderRadius:6,padding:"5px 12px",color:view==="cards"?T.text:T.textMuted,fontWeight:600,fontSize:T.fs11,cursor:"pointer",fontFamily:T.fontBase}}>📊 Cards</button>
+          <button onClick={()=>setView("charts")} style={{background:view==="charts"?T.card:"transparent",border:view==="charts"?`1px solid ${T.border}`:"1px solid transparent",borderRadius:6,padding:"5px 12px",color:view==="charts"?T.text:T.textMuted,fontWeight:600,fontSize:T.fs11,cursor:"pointer",fontFamily:T.fontBase}}>🥧 Gráficos</button>
+        </div>
+      </div>
+
+      {view==="charts"&&(()=>{
+        // Gráfico 1: % de INSUMOS CONTABILIZADOS (ex/items.length)
+        // Gráfico 2: % de VALOR TOTAL CONTABILIZADO (vC/vA)
+        // Gráfico 3: % de CONTAGENS VALIDADAS (countingsValidated/sortedCountings.length)
+        // Cor do valor contabilizado/validado: cinza=sem dado, verde=igual, roxo=acima, vermelho=abaixo
+        const noInsumos = items.length===0;
+        const noValor   = vA===0;
+        const noCount   = sortedCountings.length===0;
+
+        const contColor  = noInsumos||!lastC||ex===0 ? T.textMuted : ex<items.length?T.red:ex===items.length?T.green:T.purple;
+        const valColor   = noValor||!lastC||vC===0   ? T.textMuted : vC<vA?T.red:vC===vA?T.green:T.purple;
+        const validColor = noCount||countingsValidated===0 ? T.textMuted : countingsValidated<sortedCountings.length?T.red:countingsValidated===sortedCountings.length?T.green:T.purple;
+
+        const contDiff = !lastC||noInsumos ? null : ex-items.length;
+        const valDiff  = !lastC||noValor   ? null : vC-vA;
+        const validDiff= noCount           ? null : countingsValidated-sortedCountings.length;
+
+        const diffColor=(d)=> d===null?T.textMuted:d===0?T.green:d>0?T.purple:T.red;
+        const fmtDiff=(d,isCur=false)=>d===null?"—":isCur?(d>0?"+":"")+fmtCur(d):(d>0?"+":"")+d;
+
+        // Linha de dado: LABEL: VALOR — sem quadrado, alinhado à esquerda
+        const DataRow=({label,value,color=T.text})=>(
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"4px 0",borderBottom:`1px solid ${T.border}44`}}>
+            <span style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,flexShrink:0,marginRight:6}}>{label}</span>
+            <span style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color,textAlign:"right"}}>{value}</span>
+          </div>
+        );
+
+        return(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+          {/* Gráfico 1: Insumos contabilizados */}
+          <div style={{...S.card({padding:"16px 12px"}),display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>🧮 INSUMOS CONTABILIZADOS</div>
+            <PieChart size={140} slices={[
+              {value:lastC&&ex>0?ex:0,       color:contColor,  empty:noInsumos||!lastC||ex===0},
+              {value:noInsumos?1:Math.max(items.length-(lastC?ex:0),0), color:T.surface, empty:noInsumos},
+            ]}/>
+            <div style={{width:"100%"}}>
+              <DataRow label="INSUMOS CADASTRADOS"    value={noInsumos?"—":items.length}           color={noInsumos?T.textMuted:T.accent}/>
+              <DataRow label="INSUMOS CONTABILIZADOS" value={!lastC||ex===0?"—":ex}                color={contColor}/>
+              <DataRow label="DIFERENÇA EM QUANTIDADE" value={fmtDiff(contDiff)}                   color={diffColor(contDiff)}/>
+            </div>
+          </div>
+          {/* Gráfico 2: Valor total contabilizado */}
+          <div style={{...S.card({padding:"16px 12px"}),display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>💰 VALOR TOTAL CONTABILIZADO</div>
+            <PieChart size={140} slices={[
+              {value:lastC&&vC>0?vC:0,         color:valColor,  empty:noValor||!lastC||vC===0},
+              {value:noValor?1:Math.max(vA-(lastC?vC:0),0), color:T.surface, empty:noValor},
+            ]}/>
+            <div style={{width:"100%"}}>
+              <DataRow label="VALOR TOTAL ADQUIRIDO"     value={noValor?"—":fmtCur(vA)}        color={noValor?T.textMuted:T.accent}/>
+              <DataRow label="VALOR TOTAL CONTABILIZADO" value={!lastC||vC===0?"—":fmtCur(vC)} color={valColor}/>
+              <DataRow label="DIFERENÇA EM VALOR"        value={fmtDiff(valDiff,true)}          color={diffColor(valDiff)}/>
+            </div>
+          </div>
+          {/* Gráfico 3: Contagens validadas */}
+          <div style={{...S.card({padding:"16px 12px"}),display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>✅ CONTAGENS VALIDADAS</div>
+            <PieChart size={140} slices={[
+              {value:countingsValidated,                           color:validColor, empty:noCount||countingsValidated===0},
+              {value:noCount?1:Math.max(sortedCountings.length-countingsValidated,0), color:T.surface, empty:noCount},
+            ]}/>
+            <div style={{width:"100%"}}>
+              <DataRow label="CONTAGENS REGISTRADAS" value={noCount?"—":sortedCountings.length}       color={noCount?T.textMuted:T.accent}/>
+              <DataRow label="CONTAGENS VALIDADAS"   value={noCount||countingsValidated===0?"—":countingsValidated} color={validColor}/>
+              <DataRow label="CONTAGENS PENDENTES"   value={noCount||countingsPendingVal===0?"—":countingsPendingVal} color={noCount?T.textMuted:countingsPendingVal>0?T.yellow:T.green}/>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
+      {view==="cards"&&<div>
 
       {/* LINHA 1 */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-        <Card icon="📦" label="INSUMOS CADASTRADOS"     value={items.length}                     color={T.accent}            onClick={()=>onNavigate(1)}/>
-        <Card icon="🧮" label="INSUMOS CONTABILIZADOS"  value={lastC?ex:"—"} sub={lastC?lastC.label:null} color={colorContabilizados} onClick={()=>onNavigate(2)}/>
-        <Card icon="🔢" label="DIFERENÇA EM QUANTIDADE" value={lastC?`${dQ>0?"+":""}${dQ}`:"—"} color={colorDiffQtd}         onClick={()=>onNavigate(2,"evolution")}/>
+        <Card icon="📦" label="INSUMOS CADASTRADOS"     value={items.length===0?"—":items.length}        color={items.length===0?T.textMuted:T.accent}            onClick={()=>onNavigate(1)}/>
+        <Card icon="🧮" label="INSUMOS CONTABILIZADOS"  value={lastC?ex:"—"} sub={lastC?lastC.label:null} color={lastC?colorContabilizados:T.textMuted} onClick={()=>onNavigate(2)}/>
+        <Card icon="🔢" label="DIFERENÇA EM QUANTIDADE" value={lastC?`${dQ>0?"+":""}${dQ}`:"—"} color={lastC?colorDiffQtd:T.textMuted} onClick={()=>onNavigate(2,"evolution")}/>
       </div>
 
       {/* LINHA 2 */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-        <Card icon="💳" label="VALOR TOTAL ADQUIRIDO"     value={fmtCur(vA)}            color={T.accent}           onClick={()=>onNavigate(3,"history")}/>
-        <Card icon="💰" label="VALOR TOTAL CONTABILIZADO" value={fmtCur(vC)} sub={lastC?lastC.label:null} color={colorVContabilizado} onClick={()=>onNavigate(2)}/>
-        <Card icon="💹" label="DIFERENÇA EM VALOR"        value={lastC?fmtCur(dV):"—"}  color={colorDiffVal}       onClick={()=>onNavigate(2,"evolution")}/>
+        <Card icon="💳" label="VALOR TOTAL ADQUIRIDO"     value={vA===0?"—":fmtCur(vA)}            color={vA===0?T.textMuted:T.accent}           onClick={()=>onNavigate(3,"history")}/>
+        <Card icon="💰" label="VALOR TOTAL CONTABILIZADO" value={lastC&&vC>0?fmtCur(vC):"—"} sub={lastC?lastC.label:null} color={lastC&&vC>0?colorVContabilizado:T.textMuted} onClick={()=>onNavigate(2)}/>
+        <Card icon="💹" label="DIFERENÇA EM VALOR"        value={lastC?fmtCur(dV):"—"}  color={lastC?colorDiffVal:T.textMuted}       onClick={()=>onNavigate(2,"evolution")}/>
       </div>
 
       {/* STATUS DAS QUANTIDADES */}
@@ -659,7 +828,7 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
           <Card
             icon="📋"
             label="CONTAGENS REGISTRADAS"
-            value={sortedCountings.length}
+            value={sortedCountings.length===0?"—":sortedCountings.length}
             sub={lastC?`Última: ${fmtDate(lastC.date)}`:null}
             color={sortedCountings.length>0?T.accent:T.textMuted}
             onClick={()=>onNavigate(2,"history")}
@@ -667,22 +836,49 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
           <Card
             icon="✅"
             label="CONTAGENS VALIDADAS"
-            value={countingsValidated}
+            value={sortedCountings.length===0?"—":countingsValidated}
             sub={countingsValidated>0&&lastC?`Última: ${fmtDate(lastC.date)}`:null}
-            color={lastC?(countingsValidated===sortedCountings.length?T.green:T.red):T.textMuted}
+            color={sortedCountings.length===0?T.textMuted:lastC?(countingsValidated===sortedCountings.length?T.green:T.red):T.textMuted}
             onClick={()=>onNavigate(2,"history")}
           />
           <Card
             icon="⏳"
             label="CONTAGENS PENDENTES"
-            value={countingsPendingVal}
+            value={sortedCountings.length===0?"—":countingsPendingVal}
             sub={countingsPendingVal>0?"Aguardando validação":null}
-            color={colorPendingVal}
+            color={sortedCountings.length===0?T.textMuted:colorPendingVal}
             onClick={()=>onNavigate(2,"schedule")}
           />
         </div>
       </div>
 
+      </div>} {/* end cards view */}
+
+    </div>
+  );
+}
+
+function PurchaseGroup({label,color,items,unit}) {
+  const [open,setOpen]=useState(false);
+  const total=items.reduce((s,p)=>s+Number(p.qty||0),0);
+  return(
+    <div style={{marginBottom:4}}>
+      <div onClick={()=>setOpen(p=>!p)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",padding:"4px 0"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <span style={{...S.tag(color),fontSize:T.fs10}}>{label}</span>
+          <span style={{fontSize:T.fs11,color:T.textMuted}}>{items.length} compra{items.length!==1?"s":""}</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontFamily:T.fontMono,fontSize:T.fs11,color,fontWeight:700}}>+{total} {unit}</span>
+          <span style={{fontSize:T.fs10,color:T.textMuted}}>{open?"▲":"▼"}</span>
+        </div>
+      </div>
+      {open&&items.map((p,i)=>(
+        <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0 3px 12px",borderLeft:`2px solid ${color}44`}}>
+          <span style={{fontSize:T.fs11,color:T.textMuted}}>{fmtDate(p.date)}{p.note?` · ${p.note}`:""}</span>
+          <span style={{fontFamily:T.fontMono,fontSize:T.fs11,color,fontWeight:600}}>+{p.qty}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -711,11 +907,11 @@ function ItemsTab({items,setItems,countings}) {
       {confirm&&<ConfirmModal message={`Deseja excluir "${confirm.name}"?`} onConfirm={()=>{setItems(prev=>prev.filter(i=>i.id!==confirm.id));setConfirm(null);}} onCancel={()=>setConfirm(null)}/>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,marginTop:2}}>
         <div style={{...S.sec,marginBottom:0}}>Insumos <span style={{color:T.textMuted,fontWeight:400}}>({items.length})</span></div>
-        <button onClick={()=>{setEdit(null);setForm(empty);setShowForm(p=>!p);}} style={S.btn(showForm?T.textMuted:T.green,false,true)}>{showForm?"✕ Fechar":"➕ Novo"}</button>
+        <button onClick={()=>{setEdit(null);setForm(empty);setShowForm(p=>!p);}} style={S.btn(showForm?T.textMuted:T.green,false,true)}>{showForm?"✕ Fechar":"+ Novo"}</button>
       </div>
       {showForm&&(
         <div style={{...S.card({marginBottom:16,border:`1px solid ${T.border}`,padding:"18px"})}}>
-          <div style={{fontWeight:700,marginBottom:14,color:T.green,fontSize:T.fs14}}>{edit!==null?"✏️ Editar":"➕ Novo Insumo"}</div>
+          <div style={{fontWeight:700,marginBottom:14,color:T.green,fontSize:T.fs14}}>{edit!==null?"Editar insumo":"Novo insumo"}</div>
           <div style={S.label}>Nome *</div>
           <input placeholder="Ex: TOALHA DE BANHO" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value.toUpperCase()}))} style={{...S.input({marginBottom:12,textTransform:"uppercase"})}}/>
           <div style={S.label}>Unidade</div>
@@ -758,31 +954,30 @@ function ItemsTab({items,setItems,countings}) {
                   <span>Total adquirido: <b style={{color:T.text}}>{getTotalAcquired(it)} {it.unit}</b></span>
                 </div>
                 {(it.min||it.max)&&<div style={{fontSize:T.fs12,color:T.textMuted,marginTop:4}}>{it.min?<span>Mínimo: <b style={{color:T.warm}}>{it.min}</b></span>:""}{it.min&&it.max?" · ":""}{it.max?<span>Máximo: <b style={{color:T.purple}}>{it.max}</b></span>:""}</div>}
-                {(it.purchases||[]).length>0&&(
+                {(it.purchases||[]).length>0&&(()=>{
+                  const initials=(it.purchases||[]).filter(p=>p.pType==="initial");
+                  const repos=(it.purchases||[]).filter(p=>p.pType==="reposition");
+                  const others=(it.purchases||[]).filter(p=>!p.pType||(!["initial","reposition"].includes(p.pType)));
+                  const groups=[
+                    ...(initials.length?[{label:"Entrada inicial",color:T.warm,items:initials}]:[]),
+                    ...(repos.length?[{label:"Reposição",color:T.purple,items:repos}]:[]),
+                    ...(others.length?[{label:"Compras",color:T.green,items:others}]:[]),
+                  ];
+                  return(
                   <div style={{marginTop:8,background:T.surface,borderRadius:8,padding:"8px 10px"}}>
-                    <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>📦 Histórico de compras</div>
-                    {(it.purchases||[]).map((p,i)=>{
-                      const pc=p.pType==="initial"?T.warm:p.pType==="reposition"?T.purple:T.green;
-                      const plabel=p.pType==="initial"?"Entrada inicial":p.pType==="reposition"?"Reposição":null;
-                      return(
-                      <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2,gap:8}}>
-                        <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                          <span style={{fontSize:T.fs11,color:pc,fontWeight:600}}>{fmtDate(p.date)}</span>
-                          {plabel&&<span style={{...S.tag(pc),fontSize:T.fs10}}>{plabel}</span>}
-                        </div>
-                        <span style={{fontFamily:T.fontMono,color:pc,fontWeight:600,flexShrink:0,fontSize:T.fs11}}>+{p.qty} {it.unit}</span>
-                        {p.note&&<span style={{color:T.textMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:T.fs11}}>{p.note}</span>}
-                      </div>
-                      );
-                    })}
+                    <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:6}}>📦 Histórico de compras</div>
+                    {groups.map((g,gi)=>(
+                      <PurchaseGroup key={gi} label={g.label} color={g.color} items={g.items} unit={it.unit}/>
+                    ))}
                   </div>
-                )}
+                  );
+                })()}
                 {it.attachment?.startsWith("data:image")&&<img src={it.attachment} alt="" style={{width:56,height:56,objectFit:"cover",borderRadius:8,marginTop:8}}/>}
                 {it.attachmentName&&!it.attachment?.startsWith("data:image")&&<div style={{fontSize:T.fs11,color:T.purple,marginTop:4}}>📎 {it.attachmentName}</div>}
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0,alignSelf:"flex-start"}}>
-                <button onClick={()=>startEdit(it)} style={S.btn(T.accent,false,true)}>✏️</button>
-                <button onClick={()=>setConfirm({id:it.id,name:it.name})} style={S.btn(T.red,false,true)}>🗑</button>
+                <button onClick={()=>startEdit(it)} style={{...S.btn(T.accent,false,true)}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button onClick={()=>setConfirm({id:it.id,name:it.name})} style={{...S.btn(T.red,false,true)}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
               </div>
             </div>
           </div>
@@ -957,7 +1152,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                     <span style={{fontSize:T.fs11,color:T.accent}}>{isExp?"▲":"▼"}</span>
                     {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();validateCounting(c);}} style={{...S.btn(T.green,false,true),fontSize:T.fs13}} title="Validar">✅</button>}
                     {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();rejectCounting(c);}} style={{...S.btn(T.red,false,true),fontSize:T.fs13,fontWeight:700}} title="Reprovar">✕</button>}
-                    <button onClick={e=>{e.stopPropagation();setConfirm({message:`Excluir "${c.label}"?\nIsso também desfará o vínculo com o agendamento correspondente.`,onConfirm:()=>{setCountings(prev=>prev.filter(x=>x.id!==c.id));setScheduledDates(prev=>prev.map(s=>s.linkedCountingId===c.id?{...s,done:false,linkedCountingId:null}:s));setConfirm(null);}});}} style={S.btn(T.red,false,true)}>🗑</button>
+                    <button onClick={e=>{e.stopPropagation();setConfirm({message:`Excluir "${c.label}"?\nIsso também desfará o vínculo com o agendamento correspondente.`,onConfirm:()=>{setCountings(prev=>prev.filter(x=>x.id!==c.id));setScheduledDates(prev=>prev.map(s=>s.linkedCountingId===c.id?{...s,done:false,linkedCountingId:null}:s));setConfirm(null);}});}} style={{...S.btn(T.red,false,true)}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
                   </div>
                 </div>
                 {/* Expandable items */}
@@ -996,19 +1191,19 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
       {subTab==="schedule"&&(
         <div>
           <div style={{...S.card({marginBottom:14,border:`1px solid ${T.border}`,padding:"18px"})}}>
-            <div style={{fontWeight:700,color:T.yellow,marginBottom:12,fontSize:T.fs14}}>{schEditId!==null?"✏️ Editar Agendamento":"➕ Agendar Contagem"}</div>
+            <div style={{fontWeight:700,color:T.yellow,marginBottom:12,fontSize:T.fs14}}>{schEditId!==null?"Editar agendamento":"Agendar contagem"}</div>
             <div style={S.label}>Nome</div>
             <input placeholder="Ex: CONTAGEM MENSAL" value={schForm.label} onChange={e=>setSchForm(p=>({...p,label:e.target.value.toUpperCase()}))} style={{...S.input({marginBottom:10,textTransform:"uppercase"})}}/>
             <div style={S.label}>Data</div>
             <input type="date" value={schForm.date} onChange={e=>setSchForm(p=>({...p,date:e.target.value}))} style={{...S.input({marginBottom:10})}}/>
             {schErr&&<div style={{color:T.red,fontSize:T.fs12,marginBottom:8}}>{schErr}</div>}
             <div style={{display:"flex",gap:8}}>
-              <button onClick={saveSchedule} style={S.btn(T.yellow)}><span style={{color:"#000"}}>{schEditId!==null?"Salvar":"Agendar"}</span></button>
+              <button onClick={saveSchedule} style={S.btn(T.yellow)}>{schEditId!==null?"Salvar":"Agendar"}</button>
               {schEditId!==null&&<button onClick={()=>{setSchEditId(null);setSchForm({label:"",date:""});setSchErr("");}} style={{...S.btn(T.surface),border:`1px solid ${T.border}`,color:T.textSub}}>Cancelar</button>}
             </div>
           </div>
-          {sortedSch.length===0&&<div style={{textAlign:"center",color:T.textMuted,padding:"30px 0",fontSize:T.fs13}}>Nenhuma contagem agendada.</div>}
-          {sortedSch.map(sd=>{
+          {sortedSch.filter(s=>!s.done).length===0&&<div style={{textAlign:"center",color:T.textMuted,padding:"30px 0",fontSize:T.fs13}}>Nenhuma contagem agendada.</div>}
+          {sortedSch.filter(s=>!s.done).map(sd=>{
             const days=daysUntil(sd.date),ov=days<0&&!sd.done;
             const color=sd.done?T.green:ov?T.red:days<=2?T.yellow:T.text;
             const linkedCounting=sd.linkedCountingId?countings.find(c=>c.id===sd.linkedCountingId):null;
@@ -1026,8 +1221,8 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                     {isLocked&&<div style={{fontSize:T.fs10,color:T.yellow,marginTop:4}}>🔗 Vinculada à contagem "{linkedCounting.label}"</div>}
                   </div>
                   <div style={{display:"flex",gap:6,marginLeft:8}}>
-                    {!sd.done&&!isLocked&&<button onClick={()=>startEditSch(sd)} style={S.btn(T.accent,false,true)}>✏️</button>}
-                    <button onClick={()=>setConfirm({message:`Excluir agendamento "${sd.label}"?${isLocked?" A contagem vinculada não será excluída automaticamente.":""}`,onConfirm:()=>{setScheduledDates(prev=>prev.filter(s=>s.id!==sd.id));setConfirm(null);}})} style={S.btn(T.red,false,true)}>🗑</button>
+                    {!sd.done&&!isLocked&&<button onClick={()=>startEditSch(sd)} style={{...S.btn(T.accent,false,true)}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>}
+                    <button onClick={()=>setConfirm({message:`Excluir agendamento "${sd.label}"?${isLocked?" A contagem vinculada não será excluída automaticamente.":""}`,onConfirm:()=>{setScheduledDates(prev=>prev.filter(s=>s.id!==sd.id));setConfirm(null);}})} style={{...S.btn(T.red,false,true)}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
                   </div>
                 </div>
               </div>
@@ -1041,6 +1236,50 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
         </div>
       )}
       {subTab==="evolution"&&<EvoTab items={items} countings={countings} purchases={purchases}/>}
+    </div>
+  );
+}
+
+function BuyPurchaseGroup({label,color,items,it,openEditPurchase,setConfirmDel}) {
+  const [open,setOpen]=useState(false);
+  const total=items.reduce((s,p)=>s+Number(p.qty||0),0);
+  const totalVal=items.reduce((s,p)=>s+Number(p.qty||0)*Number(p.itemValue||it.value||0),0);
+  return(
+    <div style={{marginBottom:6}}>
+      <div onClick={()=>setOpen(p=>!p)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",background:T.surface,borderRadius:8,padding:"8px 10px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <span style={{...S.tag(color),fontSize:T.fs10}}>{label}</span>
+          <span style={{fontSize:T.fs11,color:T.textMuted}}>{items.length} compra{items.length!==1?"s":""}</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color}}>+{total}</div>
+            <div style={{fontSize:T.fs10,color:T.textMuted}}>{fmtCur(totalVal)}</div>
+          </div>
+          <span style={{fontSize:T.fs10,color:T.textMuted}}>{open?"▲":"▼"}</span>
+        </div>
+      </div>
+      {open&&items.map(p=>(
+        <div key={p.id} style={{background:T.card,borderRadius:8,padding:"8px 10px",marginTop:4,borderLeft:`3px solid ${color}66`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div>
+              <span style={{fontSize:T.fs12,color,fontWeight:600}}>{fmtDate(p.date)}</span>
+              {p.note&&<div style={{fontSize:T.fs11,color:T.textMuted,marginTop:2}}>📝 {p.note}</div>}
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color}}>+{p.qty}</div>
+                <div style={{fontSize:T.fs10,color:T.textMuted}}>{fmtCur(Number(p.qty)*Number(p.itemValue||it.value||0))}</div>
+              </div>
+              <div style={{display:"flex",gap:4}}>
+                <button onClick={()=>openEditPurchase(p)} style={{...S.btn(T.accent,false,true),padding:"5px 8px"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button onClick={()=>setConfirmDel(p)} style={{...S.btn(T.red,false,true),padding:"5px 8px"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+              </div>
+            </div>
+          </div>
+          {p.attachment&&p.attachment.startsWith("data:image")&&<img src={p.attachment} alt="" style={{width:"100%",maxHeight:80,objectFit:"cover",borderRadius:7,marginTop:6}}/>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -1176,7 +1415,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
       {buyModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:20,fontFamily:T.fontBase,overflowY:"auto"}}>
           <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"22px 18px",width:"100%",maxWidth:360}}>
-            <div style={{fontWeight:700,fontSize:T.fs15,color:T.green,marginBottom:4}}>{editPurchaseId?"✏️ Editar Compra":"🛒 Registrar Compra"}</div>
+            <div style={{fontWeight:700,fontSize:T.fs15,color:T.green,marginBottom:4}}>{editPurchaseId?"Editar compra":"Registrar compra"}</div>
             <div style={{fontSize:T.fs13,color:T.textSub,marginBottom:14}}>{buyModal.name}</div>
             <div style={S.label}>Quantidade comprada</div>
             <input type="number" value={buyQty} onChange={e=>setBuyQty(e.target.value)} onBlur={e=>{const n=parseFloat(e.target.value);if(!isNaN(n))setBuyQty(String(n));}} style={{...S.input({marginBottom:10})}}/>
@@ -1189,7 +1428,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
             <input ref={buyFileRef} type="file" accept="image/*,.pdf" onChange={e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setBuyAttach(ev.target.result);setBuyAttachName(f.name);};r.readAsDataURL(f);}} style={{display:"none"}}/>
             {buyAttach?.startsWith("data:image")&&<img src={buyAttach} alt="" style={{width:"100%",maxHeight:90,objectFit:"cover",borderRadius:8,marginBottom:10}}/>}
             <div style={{display:"flex",gap:8}}>
-              <button onClick={confirmBuy} style={S.btn(T.green)}>{editPurchaseId?"💾 Salvar":"✅ Confirmar"}</button>
+              <button onClick={confirmBuy} style={S.btn(T.green)}>{editPurchaseId?"Salvar":"Confirmar"}</button>
               <button onClick={()=>{setBuyModal(null);setEditPurchaseId(null);}} style={{...S.btn(T.surface),border:`1px solid ${T.border}`,color:T.textSub}}>Cancelar</button>
             </div>
           </div>
@@ -1211,7 +1450,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
               <span style={{fontSize:T.fs10,color:T.purple,fontWeight:600}}>■ Reposição</span>
             </div>
           </div>
-          {lastC&&allSug.length===0&&<div style={{textAlign:"center",color:T.green,padding:"40px 0",fontWeight:600,fontSize:T.fs14}}>✅ Todos os insumos já atingiram o máximo!<br/><span style={{fontSize:T.fs12,color:T.textMuted,fontWeight:400}}>Incluindo compras já registradas.</span></div>}
+          {lastC&&allSug.length===0&&<div style={{textAlign:"center",color:T.green,padding:"40px 0",fontWeight:600,fontSize:T.fs14}}>✅ Todos os insumos já atingiram o máximo!</div>}
           {allSug.length>0&&(
             <>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -1223,37 +1462,39 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
                 const typeLabel=it.isInitial?"Entrada inicial":"Reposição";
                 return(
                 <div key={it.id} style={{...S.card({marginBottom:10,border:`1px solid ${T.border}`,background:sel[it.id]?T.green+"06":T.card})}}> 
-                  <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-                    <div onClick={()=>setSel(p=>({...p,[it.id]:!p[it.id]}))} style={{width:20,height:20,borderRadius:5,border:`2px solid ${sel[it.id]?T.green:T.textMuted}`,background:sel[it.id]?T.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2,cursor:"pointer"}}>
-                      {sel[it.id]&&<span style={{color:"#fff",fontSize:T.fs12,fontWeight:900}}>✓</span>}
-                    </div>
-                    <div style={{flex:1}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:0}}>
+                    {/* Header row: checkbox + name + tag */}
+                    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:6}}>
+                      <div onClick={()=>setSel(p=>({...p,[it.id]:!p[it.id]}))} style={{width:20,height:20,borderRadius:5,border:`2px solid ${sel[it.id]?T.green:T.textMuted}`,background:sel[it.id]?T.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
+                        {sel[it.id]&&<span style={{color:"#fff",fontSize:T.fs12,fontWeight:900}}>✓</span>}
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
                         <div style={{fontWeight:700,fontSize:T.fs14}}>{it.name}</div>
                         <span style={{...S.tag(typeColor),fontSize:T.fs10}}>{typeLabel}</span>
                       </div>
-                      <div style={{fontSize:T.fs12,color:T.accent,marginBottom:10}}>{it.unit}</div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-                        <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
-                          <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,fontWeight:600}}>{it.isInitial?"Quantidade inicial":"Última contagem"}</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:it.isInitial?T.red:typeColor}}>{it.isInitial?0:it.hasValidated?it.curBase:"—"}</div>
-                        </div>
-                        <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
-                          <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,fontWeight:600}}>Necessário</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.yellow}}>+{it.need}</div>
-                        </div>
-                        <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
-                          <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,fontWeight:600}}>Valor unitário</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:T.yellow}}>{fmtCur(it.value)}</div>
-                        </div>
-                      </div>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:T.green+"0a",border:`1px solid ${T.border}`,borderRadius:9,padding:"7px 10px",marginBottom:8}}>
-                        <div style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600}}>Valor estimado</div>
-                        <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.green}}>{fmtCur(it.est)}</div>
-                      </div>
-                      {(it.min||it.max)&&<div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:8}}>{it.min?<span>Mínimo: <b style={{color:T.warm}}>{it.min}</b></span>:""}{it.min&&it.max?" · ":""}{it.max?<span>Máximo: <b style={{color:T.purple}}>{it.max}</b></span>:""}</div>}
-                      <button onClick={()=>sel[it.id]?openBuy(it):null} style={{...S.btn(sel[it.id]?T.green:T.textMuted,true,true),fontSize:T.fs12,opacity:sel[it.id]?1:0.4,cursor:sel[it.id]?"pointer":"not-allowed"}}>🛒 Registrar compra</button>
                     </div>
+                    <div style={{fontSize:T.fs12,color:T.accent,marginBottom:10}}>{it.unit}</div>
+                    {/* Sub-content: full width, aligned to left edge */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                      <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
+                        <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,fontWeight:600}}>{it.isInitial?"Quantidade inicial":"Última contagem"}</div>
+                        <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:it.isInitial?T.red:typeColor}}>{it.isInitial?0:it.hasValidated?it.curBase:"—"}</div>
+                      </div>
+                      <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
+                        <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,fontWeight:600}}>Necessário</div>
+                        <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.yellow}}>+{it.need}</div>
+                      </div>
+                      <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
+                        <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,fontWeight:600}}>Valor unitário</div>
+                        <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:T.yellow}}>{fmtCur(it.value)}</div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:T.green+"0a",border:`1px solid ${T.border}`,borderRadius:9,padding:"7px 10px",marginBottom:8}}>
+                      <div style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600}}>Valor estimado</div>
+                      <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.green}}>{fmtCur(it.est)}</div>
+                    </div>
+                    {(it.min||it.max)&&<div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:8}}>{it.min?<span>Mínimo: <b style={{color:T.warm}}>{it.min}</b></span>:""}{it.min&&it.max?" · ":""}{it.max?<span>Máximo: <b style={{color:T.purple}}>{it.max}</b></span>:""}</div>}
+                    <button onClick={()=>sel[it.id]?openBuy(it):null} style={{...S.btn(sel[it.id]?T.green:T.textMuted,true,true),fontSize:T.fs12,opacity:sel[it.id]?1:0.4,cursor:sel[it.id]?"pointer":"not-allowed"}}>🛒 Registrar compra</button>
                   </div>
                 </div>
                 );
@@ -1302,35 +1543,20 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
                         <div style={{fontSize:T.fs10,color:T.textMuted}}>{totalQty} {it.unit} total</div>
                       </div>
                     </div>
-                    {/* Individual purchases */}
-                    {ps.map(p=>{
-                      const pc=p.pType==="initial"?T.warm:p.pType==="reposition"?T.purple:T.green;
-                      const plabel=p.pType==="initial"?"Entrada inicial":p.pType==="reposition"?"Reposição":null;
-                      return(
-                      <div key={p.id} style={{background:T.surface,borderRadius:9,padding:"9px 12px",marginBottom:6}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:p.note?4:0}}>
-                          <div>
-                            <div style={{display:"flex",alignItems:"center",gap:6}}>
-                              <span style={{fontSize:T.fs12,color:pc,fontWeight:600}}>{fmtDate(p.date)}</span>
-                              {plabel&&<span style={{...S.tag(pc),fontSize:T.fs10}}>{plabel}</span>}
-                            </div>
-                            {p.note&&<div style={{fontSize:T.fs11,color:T.textMuted,marginTop:2}}>📝 {p.note}</div>}
-                          </div>
-                          <div style={{display:"flex",alignItems:"center",gap:8}}>
-                            <div style={{textAlign:"right"}}>
-                              <div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color:pc}}>+{p.qty}</div>
-                              <div style={{fontSize:T.fs10,color:T.textMuted}}>{fmtCur(Number(p.qty)*Number(p.itemValue||it.value||0))}</div>
-                            </div>
-                            <div style={{display:"flex",gap:4}}>
-                              <button onClick={()=>openEditPurchase(p)} style={{...S.btn(T.accent,false,true),padding:"5px 8px",fontSize:T.fs10}}>✏️</button>
-                              <button onClick={()=>setConfirmDel(p)} style={{...S.btn(T.red,false,true),padding:"5px 8px",fontSize:T.fs10}}>🗑</button>
-                            </div>
-                          </div>
-                        </div>
-                        {p.attachment?.startsWith("data:image")&&<img src={p.attachment} alt="" style={{width:"100%",maxHeight:80,objectFit:"cover",borderRadius:7,marginTop:6}}/>}
-                        {p.attachmentName&&!p.attachment?.startsWith("data:image")&&<div style={{fontSize:T.fs10,color:T.purple,marginTop:4}}>📎 {p.attachmentName}</div>}
-                      </div>
-                    );})}
+                    {/* Grouped purchases by type */}
+                    {(()=>{
+                      const initials=ps.filter(p=>p.pType==="initial");
+                      const repos=ps.filter(p=>p.pType==="reposition");
+                      const others=ps.filter(p=>!p.pType||(!["initial","reposition"].includes(p.pType)));
+                      const groups=[
+                        ...(initials.length?[{label:"Entrada inicial",color:T.warm,items:initials}]:[]),
+                        ...(repos.length?[{label:"Reposição",color:T.purple,items:repos}]:[]),
+                        ...(others.length?[{label:"Compras",color:T.green,items:others}]:[]),
+                      ];
+                      return groups.map((g,gi)=>(
+                        <BuyPurchaseGroup key={gi} label={g.label} color={g.color} items={g.items} it={it} openEditPurchase={openEditPurchase} setConfirmDel={setConfirmDel}/>
+                      ));
+                    })()}
                     {/* Item subtotal */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:T.green+"08",borderRadius:8,padding:"7px 10px",marginTop:4}}>
                       <span style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600}}>Subtotal do insumo</span>
@@ -1401,7 +1627,7 @@ function EvoTab({items,countings,purchases}) {
         {items.length===0
           ? <div style={{fontSize:T.fs13,color:T.textMuted}}>Nenhum insumo cadastrado.</div>
           : <select value={selItem} onChange={e=>setSelItem(e.target.value)} style={S.input()}>
-              <option value="all">Todos os insumos</option>
+              <option value="all">TODOS OS INSUMOS</option>
               {items.map(i=><option key={i.id} value={String(i.id)}>{i.name}</option>)}
             </select>
         }
@@ -1636,7 +1862,7 @@ function CfgTab({appPass,setAppPass,passHint,setPassHint,whatsapp,setWhatsapp}) 
         <input placeholder="Ex: 5586999436523" value={phone} onChange={e=>{setPhone(e.target.value);setWMsg(null);}} style={{...S.input({marginBottom:6,...S.mono})}}/>
         <div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:12}}>Exemplo: 55 + 86 + número</div>
         {wMsg&&<div style={{color:wMsg.ok?T.green:T.red,fontSize:T.fs12,marginBottom:10,fontWeight:600}}>{wMsg.text}</div>}
-        <button onClick={savePhone} style={S.btn(T.green)}>💾 Salvar número</button>
+        <button onClick={savePhone} style={S.btn(T.green)}>Salvar número</button>
       </div>
     </div>
   );
@@ -1649,27 +1875,27 @@ function InstructionsTab() {
   const toggle=k=>setOpen(p=>p===k?null:k);
   const SUBS=[["gerente","🔐 Área do Gerente"],["contador","🧮 Área do Contador"]];
 
-  const P=({children})=><p style={{fontSize:T.fs12,color:T.textMuted,lineHeight:1.7,margin:"0 0 8px 0"}}>{children}</p>;
+  const P=({children})=><p style={{fontSize:T.fs12,color:T.textMuted,lineHeight:1.75,margin:"0 0 10px 0"}}>{children}</p>;
   const Li=({children})=>(
-    <div style={{display:"flex",gap:8,marginBottom:7,alignItems:"flex-start"}}>
-      <span style={{color:T.accent,flexShrink:0,marginTop:2,fontSize:T.fs11}}>›</span>
-      <span style={{fontSize:T.fs12,color:T.textSub,lineHeight:1.7}}>{children}</span>
+    <div style={{display:"flex",gap:8,marginBottom:8,alignItems:"flex-start"}}>
+      <span style={{color:T.accent,flexShrink:0,marginTop:3,fontSize:T.fs10}}>▸</span>
+      <span style={{fontSize:T.fs12,color:T.textSub,lineHeight:1.75}}>{children}</span>
     </div>
   );
   const Tip=({text,color=T.yellow})=>(
-    <div style={{background:color+"0d",border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:T.fs11,color,lineHeight:1.6,marginTop:6}}>{text}</div>
+    <div style={{background:color+"0d",border:`1px solid ${color}30`,borderRadius:8,padding:"9px 12px",fontSize:T.fs11,color,lineHeight:1.6,marginTop:8}}>{text}</div>
   );
-  const HL=({children,color=T.accent})=><span style={{color}}>{children}</span>;
+  const HL=({children,color=T.accent})=><b style={{color,fontWeight:700}}>{children}</b>;
 
   const Acc=({id,title,color=T.accent,children})=>{
     const isOpen=open===id;
     return(
       <div style={{...S.card({marginBottom:8,padding:0,overflow:"hidden"})}}>
-        <div onClick={()=>toggle(id)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",cursor:"pointer"}}>
-          <span style={{fontWeight:600,fontSize:T.fs13,color}}>{title}</span>
-          <span style={{fontSize:T.fs11,color:T.textMuted,marginLeft:8}}>{isOpen?"▲":"▼"}</span>
+        <div onClick={()=>toggle(id)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 16px",cursor:"pointer",background:isOpen?T.surface+"80":"transparent"}}>
+          <span style={{fontWeight:700,fontSize:T.fs13,color}}>{title}</span>
+          <span style={{fontSize:T.fs10,color:T.textMuted,marginLeft:8,fontFamily:T.fontMono}}>{isOpen?"▲":"▼"}</span>
         </div>
-        {isOpen&&<div style={{padding:"0 14px 14px",borderTop:`1px solid ${T.border}`}}><div style={{height:10}}/>{children}</div>}
+        {isOpen&&<div style={{padding:"12px 16px 16px",borderTop:`1px solid ${T.border}`}}>{children}</div>}
       </div>
     );
   };
@@ -1685,40 +1911,47 @@ function InstructionsTab() {
       {sub==="gerente"&&(
         <div>
           <Acc id="dashboard" title="📊 Aba Dashboard" color={T.warm}>
-            <P>Visão geral do estoque em tempo real. Todos os cards são clicáveis e levam diretamente à tela correspondente.</P>
-            <Li>Os cards de quantidade mostram insumos cadastrados, contabilizados e a diferença — com referência à última contagem.</Li>
-            <Li>Os cards de valor comparam o total adquirido com o valor contabilizado na última contagem.</Li>
-            <Li><HL color={T.red}>Vermelho</HL> indica falta ou problema. <HL color={T.green}>Verde</HL> indica normalidade. <HL color={T.purple}>Roxo</HL> indica excesso acima do máximo.</Li>
-            <Li>Status das Quantidades e Status das Contagens resumem o cenário do estoque em 6 cards objetivos, sempre baseados na última contagem registrada.</Li>
+            <P>Visão geral do estoque em tempo real. Todos os cards são clicáveis e levam diretamente à tela correspondente. Quando não há dados, os cards exibem —.</P>
+            <Li><HL>Linha 1 — Insumos:</HL> mostra insumos cadastrados, insumos contabilizados (baseado na última contagem) e a diferença entre os dois.</Li>
+            <Li><HL>Linha 2 — Valores:</HL> mostra o valor total adquirido (compras registradas), o valor total contabilizado (última contagem × valor unitário) e a diferença.</Li>
+            <Li><HL>Status das quantidades:</HL> exibido após a primeira contagem. Mostra quantos itens estão abaixo do mínimo, dentro da margem ou acima do máximo.</Li>
+            <Li><HL>Status das contagens:</HL> total de contagens registradas, validadas e pendentes de validação.</Li>
+            <Li>Alternando para <HL>Gráficos</HL>, três donuts mostram visualmente: % de insumos contabilizados, % do valor contabilizado e % de contagens validadas.</Li>
+            <Li><HL color={T.red}>Vermelho</HL> — abaixo do esperado. <HL color={T.green}>Verde</HL> — igual ao esperado. <HL color={T.purple}>Roxo</HL> — acima do esperado.</Li>
           </Acc>
 
           <Acc id="insumos" title="📦 Aba Insumos" color={T.warm}>
-            <P>Ponto de partida de tudo. Aqui você registra cada item que compõe o estoque — toalhas, roupões etc.</P>
-            <Li>Informe o <HL>nome</HL> (em maiúsculas), a <HL>unidade</HL> de medida, o <HL>valor unitário</HL>, a quantidade <HL color={T.warm}>mínima</HL> e a <HL color={T.purple}>máxima</HL>.</Li>
-            <Li>O <HL color={T.warm}>mínimo</HL> é o piso de alerta — abaixo dele, o item aparece em vermelho no dashboard e nas contagens. O <HL color={T.purple}>máximo</HL> é o nível ideal de abastecimento que a programação de compras usa como meta.</Li>
-            <Li>O histórico de compras de cada insumo fica visível diretamente no card, organizado por data.</Li>
-            <Tip text="⚠️ Sem mínimo e máximo definidos, o sistema não consegue sugerir compras nem alertar sobre estoque crítico." color={T.yellow}/>
+            <P>Ponto de partida do sistema. Aqui você cadastra cada item que compõe o estoque — toalhas, roupões, fronhas etc.</P>
+            <Li>Cadastre o <HL>nome</HL> (vai automaticamente para maiúsculas), a <HL>unidade</HL> de medida, o <HL>valor unitário</HL>, a quantidade <HL color={T.warm}>mínima</HL> e a <HL color={T.purple}>máxima</HL>. Você pode anexar uma imagem ou PDF ao insumo.</Li>
+            <Li>O <HL color={T.warm}>mínimo</HL> é o piso de alerta — abaixo dele o item aparece em vermelho nas contagens e no dashboard. O <HL color={T.purple}>máximo</HL> é o nível ideal de abastecimento e serve como meta para a programação de compras.</Li>
+            <Li>O histórico de compras de cada insumo aparece diretamente no card, agrupado em <HL color={T.warm}>Entrada inicial</HL> (primeira compra) e <HL color={T.purple}>Reposição</HL> (compras posteriores). Clique no grupo para expandir as compras individuais.</Li>
+            <Li>O campo <HL>Total adquirido</HL> soma automaticamente todas as compras registradas para aquele insumo.</Li>
+            <Tip text="⚠️ Sem mínimo e máximo definidos, o sistema não consegue gerar sugestões de compra nem alertar sobre estoque crítico." color={T.yellow}/>
           </Acc>
 
           <Acc id="contagens" title="📋 Aba Contagens" color={T.warm}>
-            <P>Dividida em três seções acessíveis pelas abas internas.</P>
-            <Li><HL>Histórico</HL> — lista todas as contagens registradas. Clique em qualquer uma para ver o detalhamento completo: quantidades contabilizadas, valor unitário, valor total contabilizado, total adquirido, mínimo e máximo de cada insumo.</Li>
-            <Li><HL>Agendamentos</HL> — crie agendamentos com nome e data. Somente na data agendada (ou em datas que já passaram sem realização) o contador consegue acessar a contagem. Ao reprovar, um agendamento de recontagem é criado automaticamente.</Li>
-            <Li><HL>Evolução</HL> — gráfico e tabela comparando compras e contagens por insumo ao longo do tempo.</Li>
-            <Tip text="✅ Validar torna o resultado oficial. ❌ Reprovar cria uma recontagem com prazo de 48 horas a partir da reprovação." color={T.green}/>
+            <P>Dividida em três sub-abas: Histórico, Agendamentos e Evolução.</P>
+            <Li><HL>Histórico</HL> — lista todas as contagens registradas, da mais recente para a mais antiga. Clique em qualquer contagem para expandir e ver: quantidade contabilizada, valor contabilizado, total adquirido, mínimo, máximo e status de cada insumo. A mais recente recebe a tag ÚLTIMA CONTAGEM.</Li>
+            <Li><HL>Agendamentos</HL> — crie agendamentos informando nome e data. O contador só consegue acessar a contagem na data agendada ou em datas atrasadas ainda não realizadas. Ao reprovar uma contagem, um agendamento de Recontagem é criado automaticamente com prazo de 48 horas. Agendamentos concluídos somem da lista automaticamente.</Li>
+            <Li><HL>Evolução</HL> — selecione um insumo para ver o gráfico de barras comparando compras e contagens validadas ao longo do tempo. Selecione "TODOS OS INSUMOS" para ver o resumo geral com valor total adquirido e contabilizado.</Li>
+            <Li>Para <HL color={T.green}>validar</HL>: os valores contabilizados passam a ser o estoque oficial, o agendamento é concluído e o sistema verifica se há itens abaixo do máximo para sugerir compras. Para <HL color={T.red}>reprovar</HL>: a contagem é marcada como reprovada e um agendamento de recontagem é criado automaticamente.</Li>
+            <Tip text="💡 Apenas contagens validadas alimentam a programação de compras e a tela de evolução." color={T.accent}/>
           </Acc>
 
           <Acc id="compras" title="🛒 Aba Compras" color={T.warm}>
-            <P>Gerencia o abastecimento do estoque em duas visões.</P>
-            <Li><HL>Programação</HL> — lista automática dos insumos que precisam ser comprados para atingir a quantidade máxima. O cálculo desconta compras já registradas que ainda não foram contempladas em uma nova contagem. <HL>O gerente indica a quantidade que será comprada</HL> ao registrar cada compra.</Li>
-            <Li><HL>Compras Realizadas</HL> — histórico completo agrupado por insumo, com totais de quantidade e valor. Permite selecionar itens para calcular o gasto por grupo.</Li>
-            <Tip text="💡 As sugestões de compra são baseadas na última contagem validada. Quanto mais frequentes as contagens, mais precisas as sugestões." color={T.accent}/>
+            <P>Gerencia o abastecimento em duas sub-abas: Programação e Compras Realizadas.</P>
+            <Li><HL>Programação</HL> — lista automática dos insumos que precisam ser comprados para atingir a quantidade máxima. O cálculo usa como base a última contagem validada mais as compras feitas após essa contagem. Quando todos os insumos já atingiram o máximo, a tela informa isso. Selecione os itens desejados e registre cada compra individualmente.</Li>
+            <Li>A primeira compra de um insumo é classificada como <HL color={T.warm}>Entrada inicial</HL> (laranja). As compras seguintes são classificadas como <HL color={T.purple}>Reposição</HL> (roxo). Essa classificação aparece tanto na programação quanto no histórico.</Li>
+            <Li><HL>Compras Realizadas</HL> — histórico completo de todas as compras, agrupado por insumo e depois por tipo (Entrada inicial / Reposição). Clique no grupo para ver as compras individuais com data, quantidade e nota. Selecione insumos para calcular o gasto total.</Li>
+            <Li>Ao registrar uma compra, você pode informar a <HL>data</HL>, a <HL>quantidade</HL>, uma <HL>observação</HL> e anexar a nota fiscal. Compras podem ser editadas ou excluídas posteriormente.</Li>
+            <Tip text="💡 As sugestões de compra só aparecem após a primeira contagem validada. Sem contagem validada, o sistema usa o total adquirido como base." color={T.accent}/>
           </Acc>
 
           <Acc id="seguranca" title="🔒 Aba Segurança" color={T.warm}>
-            <Li>Altere a <HL>senha</HL> de acesso à Área do Gerente. A senha padrão inicial é <span style={{fontFamily:T.fontMono,color:T.accent,fontSize:T.fs12}}>Teresa</span>.</Li>
-            <Li>Adicione uma <HL>dica de senha</HL> visível na tela de login — útil para recuperação sem precisar de suporte técnico.</Li>
-            <Li>Configure o <HL>número de WhatsApp</HL> do gerente para receber os relatórios. Informe com DDI + DDD + número, sem espaços. Exemplo: <span style={{fontFamily:T.fontMono,color:T.accent,fontSize:T.fs12}}>5586999990000</span>.</Li>
+            <P>Configurações de acesso e comunicação do sistema.</P>
+            <Li><HL>Alterar senha:</HL> informe a senha atual e a nova senha (mínimo 4 caracteres). A senha padrão inicial é <span style={{fontFamily:T.fontMono,color:T.accent,fontSize:T.fs12}}>Teresa</span>.</Li>
+            <Li><HL>Dica de senha:</HL> texto visível na tela de login ao clicar em "Esqueci minha senha". Útil para recuperação sem precisar de suporte técnico.</Li>
+            <Li><HL>WhatsApp:</HL> número do gerente para receber os relatórios enviados pelo contador. Informe no formato DDI + DDD + número sem espaços. Exemplo: <span style={{fontFamily:T.fontMono,color:T.accent,fontSize:T.fs12}}>5586999990000</span>. Quando configurado, o botão de envio aparece na tela de conclusão da contagem e na tela bloqueada.</Li>
           </Acc>
         </div>
       )}
@@ -1726,26 +1959,27 @@ function InstructionsTab() {
       {sub==="contador"&&(
         <div>
           <Acc id="acesso" title="Como acessar?" color={T.accent}>
-            <P>O contador acessa o sistema pela tela inicial, sem necessidade de senha. O acesso à contagem é liberado automaticamente apenas nas datas agendadas pelo gerente.</P>
-            <Li>Se não houver contagem agendada para hoje, a tela ficará <HL color={T.red}>bloqueada</HL>. Use o botão de WhatsApp disponível nessa tela para avisar o gerente diretamente.</Li>
-            <Li>Se houver uma contagem atrasada (agendada em data anterior e ainda não realizada), ela também fica disponível para realização.</Li>
-            <Tip text="📲 O botão de WhatsApp na tela bloqueada abre o app com a mensagem já preenchida explicando a situação ao gerente." color={T.green}/>
+            <P>O contador acessa o sistema pela tela inicial sem necessidade de senha, tocando em Área do Contador.</P>
+            <Li>O acesso à contagem é liberado automaticamente apenas nas <HL>datas agendadas</HL> pelo gerente ou em datas que já passaram sem realização (contagens atrasadas).</Li>
+            <Li>Se não houver contagem agendada para hoje, a tela ficará <HL color={T.red}>bloqueada</HL> e mostrará a próxima contagem agendada. Use o botão de WhatsApp nessa tela para avisar o gerente diretamente com a mensagem já preenchida.</Li>
+            <Tip text="📲 O botão de WhatsApp na tela bloqueada abre o aplicativo com a mensagem já redigida explicando a situação ao gerente." color={T.green}/>
           </Acc>
 
           <Acc id="contar" title="Como realizar a contagem?" color={T.accent}>
-            <Li><HL>1. Inicie</HL> — toque em Iniciar na tela de preparo. Os insumos aparecerão um por um.</Li>
-            <Li><HL>2. Conte</HL> — vá fisicamente até o local de cada item e conte a quantidade presente. Não estime.</Li>
-            <Li><HL>3. Registre</HL> — digite a quantidade no teclado numérico e toque em ✓ para confirmar o item.</Li>
-            <Li><HL>4. Navegue</HL> — use as miniaturas no rodapé para ir a qualquer item já visitado ou corrigir um valor confirmado.</Li>
-            <Li><HL>5. Envie</HL> — ao confirmar todos os itens, toque em Enviar. A contagem é salva e aparece o botão para encaminhar o relatório ao gerente via WhatsApp.</Li>
+            <P>A contagem é feita insumo por insumo. Nenhuma quantidade de referência é exibida para garantir a independência da contagem.</P>
+            <Li><HL>1. Inicie</HL> — toque em Iniciar. O nome e a unidade do primeiro insumo aparecem na tela.</Li>
+            <Li><HL>2. Conte</HL> — vá fisicamente até o local e conte a quantidade presente. Não estime.</Li>
+            <Li><HL>3. Registre</HL> — use o teclado numérico para digitar a quantidade e toque em ✓ para confirmar.</Li>
+            <Li><HL>4. Corrija se necessário</HL> — toque em Editar para alterar um valor já confirmado. Use as miniaturas no rodapé para navegar entre os insumos.</Li>
+            <Li><HL>5. Envie</HL> — ao confirmar todos os itens, toque em Enviar. A contagem é salva e o botão de WhatsApp aparece para encaminhar o relatório ao gerente.</Li>
             <Tip text="⚠️ A contagem só é salva no sistema após tocar em Enviar. Não feche o aplicativo antes de concluir esse passo." color={T.red}/>
           </Acc>
 
           <Acc id="aposenvio" title="O que acontece após o envio?" color={T.accent}>
-            <P>Após o envio, a contagem fica com status <HL color={T.yellow}>Pendente</HL> até que o gerente a analise.</P>
-            <Li>Se o gerente <HL color={T.green}>validar</HL>, os valores contabilizados passam a ser o estoque oficial e o agendamento é concluído.</Li>
-            <Li>Se o gerente <HL color={T.red}>reprovar</HL>, um novo agendamento de <HL>Recontagem</HL> é criado automaticamente para o mesmo dia, com prazo de até 48 horas para realização.</Li>
-            <Li>A recontagem funciona exatamente como uma contagem normal — aparecerá disponível na data agendada.</Li>
+            <P>Após o envio, a contagem fica com status <HL color={T.yellow}>Pendente</HL> no histórico até que o gerente a analise.</P>
+            <Li>Se o gerente <HL color={T.green}>validar</HL>, os valores contabilizados passam a ser o estoque oficial, o agendamento é marcado como concluído e o sistema verifica automaticamente a necessidade de compras.</Li>
+            <Li>Se o gerente <HL color={T.red}>reprovar</HL>, um novo agendamento de <HL>Recontagem</HL> é criado automaticamente para o mesmo dia com prazo de 48 horas. A recontagem funciona exatamente como uma contagem normal.</Li>
+            <Li>O contador receberá orientações do gerente via WhatsApp caso a contagem seja reprovada ou necessite correção.</Li>
           </Acc>
         </div>
       )}
@@ -1755,10 +1989,22 @@ function InstructionsTab() {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component {
-  constructor(props){super(props);this.state={error:null};}
+  constructor(props){super(props);this.state={error:null,info:null};}
   static getDerivedStateFromError(e){return{error:e};}
-  componentDidCatch(){this.setState({error:null});}
-  render(){return this.props.children;}
+  componentDidCatch(e,info){this.setState({error:e,info});}
+  render(){
+    if(this.state.error){
+      return(
+        <div style={{minHeight:"100vh",background:"#080d14",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"Inter,sans-serif",color:"#f1f5f9"}}>
+          <div style={{fontSize:48,marginBottom:16}}>⚠️</div>
+          <div style={{fontSize:18,fontWeight:700,marginBottom:8,color:"#ef4444"}}>Erro na aplicação</div>
+          <div style={{fontSize:13,color:"#94a3b8",marginBottom:24,textAlign:"center",maxWidth:320}}>{String(this.state.error?.message||this.state.error)}</div>
+          <button onClick={()=>{this.setState({error:null,info:null});}} style={{background:"#3b82f6",border:"none",borderRadius:10,padding:"10px 20px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Tentar novamente</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 export default function App() {
@@ -1768,6 +2014,7 @@ export default function App() {
 function AppInner() {
   const data = useAppData();
   const [screen, setScreen] = useState("home");
+
 
   const goHome = useCallback(() => setScreen("home"), []);
   const goManager = useCallback(() => setScreen("manager"), []);
