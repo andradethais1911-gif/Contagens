@@ -192,13 +192,21 @@ function ReportModal({counting,items,onClose}) {
 }
 
 function openWA(url) {
-  const a = document.createElement("a");
-  a.href = url;
-  a.target = "_blank";
-  a.rel = "noopener noreferrer";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  // Try multiple methods to handle iframe sandbox restrictions
+  let opened = false;
+  try { opened = !!window.open(url, "_blank"); } catch(e) {}
+  if(!opened) {
+    try { window.top.location.href = url; opened = true; } catch(e) {}
+  }
+  if(!opened) {
+    try {
+      const a = document.createElement("a");
+      a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      opened = true;
+    } catch(e) {}
+  }
+  return opened;
 }
 
 function buildWAMsg(counting, items) {
@@ -401,9 +409,17 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
           <div style={{...S.card({marginBottom:12,background:T.green+"08",border:`1px solid ${T.green}25`,padding:"16px"})}}>
             <div style={{fontSize:T.fs12,color:T.green,fontWeight:700,marginBottom:6}}>📲 Avisar o gerente</div>
             <div style={{fontSize:T.fs12,color:T.textMuted,marginBottom:10,lineHeight:1.6}}>Se você foi orientado a fazer a contagem hoje e o sistema está bloqueado, envie uma mensagem ao gerente explicando a situação.</div>
-            <button onClick={()=>sendWABlocked(whatsapp,`Não há contagem agendada para hoje (${fmtDate(todayStr())}). O sistema permite contagem apenas nas datas agendadas.${nextFuture?` A próxima contagem prevista é "${nextFuture.label}" em ${fmtDate(nextFuture.date)}.`:" Nenhuma contagem futura cadastrada no sistema."}`,nextFuture)} style={{...S.btn(T.green,true),padding:"11px",fontSize:T.fs13}}>
-              📲 Enviar mensagem ao gerente
-            </button>
+            {(()=>{
+              const proximaInfo = nextFuture ? ` A próxima prevista é "${nextFuture.label}" em ${fmtDate(nextFuture.date)}.` : " Nenhuma contagem futura cadastrada.";
+              const destinoInfo = nextFuture ? ` referente a *"${nextFuture.label}"* (prevista para ${fmtDate(nextFuture.date)})` : "";
+              const msg=`Olá, Teresa! 😊\n\nEstou tentando realizar a contagem de estoque${destinoInfo},  mas o sistema não está permitindo o registro.\n\n⚠️ *Motivo:* Não há contagem agendada para hoje (${fmtDate(todayStr())}).${proximaInfo}\n\n_Sistema de Gestão de Contagens_`;
+              return(
+                <a href={`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer"
+                  style={{display:"block",background:T.green,color:"#fff",fontWeight:700,fontSize:T.fs13,padding:"11px",borderRadius:10,textAlign:"center",textDecoration:"none",fontFamily:T.fontBase}}>
+                  📲 Enviar mensagem ao gerente
+                </a>
+              );
+            })()}
           </div>
         )}
         <button onClick={onBack} style={{...S.btn(T.surface,true),border:`1px solid ${T.border}`,color:T.textSub,marginTop:4}}>← Voltar ao início</button>
@@ -519,9 +535,14 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
         </div>
       </div>
       {whatsapp&&savedCounting&&(
-        <button onClick={()=>openWA(`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(buildWAMsg(savedCounting,items))}`)} style={{...S.btn(T.green,true),padding:"13px",fontSize:T.fs14,marginBottom:12,maxWidth:340}}>
+        <a
+          href={`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(buildWAMsg(savedCounting,items))}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{display:"block",width:"100%",maxWidth:340,background:T.green,color:"#fff",fontWeight:700,fontSize:T.fs14,padding:"13px",borderRadius:10,border:"none",textAlign:"center",textDecoration:"none",marginBottom:12,boxSizing:"border-box",fontFamily:T.fontBase}}
+        >
           📲 Enviar relatório ao gerente via WhatsApp
-        </button>
+        </a>
       )}
       <button onClick={onBack} style={{...S.btn(T.surface,true),border:`1px solid ${T.border}`,color:T.textSub,maxWidth:340}}>← Início</button>
     </div>
@@ -814,11 +835,11 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
   const rejectCounting=(c)=>{
     const recontagemNum=(scheduledDates||[]).filter(x=>x.isRecount&&x.originCountingId===c.id).length+1;
     const newLabel=`RECONTAGEM ${recontagemNum}`;
-    // deadline = today + 2 days
-    const d=new Date(); d.setDate(d.getDate()+2);
-    const y=d.getFullYear(); const mo=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0');
-    const deadline=`${y}-${mo}-${day}`;
-    const newSched={id:Date.now(),label:newLabel,date:deadline,done:false,isRecount:true,originCountingId:c.id};
+    // starts today, deadline = today + 2 days
+    const today=todayStr();
+    const dl=new Date(); dl.setDate(dl.getDate()+2);
+    const deadline=`${dl.getFullYear()}-${String(dl.getMonth()+1).padStart(2,'0')}-${String(dl.getDate()).padStart(2,'0')}`;
+    const newSched={id:Date.now(),label:newLabel,date:today,deadline,done:false,isRecount:true,originCountingId:c.id};
     setScheduledDates(prev=>[...prev,newSched]);
     setCountings(prev=>prev.map(x=>x.id===c.id?{...x,rejected:true}:x));
     setSel(null);
@@ -842,7 +863,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <button onClick={()=>{setRepC(sel);setShowReport(true);}} style={S.btn(T.accent,false,true)}>📄 Relatório</button>
           {!sel.validated&&!sel.rejected&&<button onClick={()=>validateCounting(sel)} style={S.btn(T.green,false,true)}>✅ Validar</button>}
-          {!sel.validated&&!sel.rejected&&<button onClick={()=>rejectCounting(sel)} style={S.btn(T.red,false,true)}>❌ Reprovar</button>}
+          {!sel.validated&&!sel.rejected&&<button onClick={()=>rejectCounting(sel)} style={{...S.btn(T.red,false,true),color:"#fff",fontWeight:700}}>✕ Reprovar</button>}
         </div>
       </div>
       {!sel.validated&&!sel.rejected&&(
@@ -892,6 +913,61 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
         {SUBS.map(([k,l])=><button key={k} onClick={()=>setSubTab(k)} style={{flex:1,background:subTab===k?T.card:"transparent",border:subTab===k?`1px solid ${T.border}`:"1px solid transparent",borderRadius:8,padding:"8px 4px",color:subTab===k?T.text:T.textMuted,fontWeight:subTab===k?700:500,fontSize:T.fs11,cursor:"pointer",fontFamily:T.fontBase}}>{l}</button>)}
       </div>
 
+      {subTab==="replenishment"&&(()=>{
+        const lastValidated=[...countings].filter(x=>x.validated).sort((a,b)=>Number(b.id)-Number(a.id))[0];
+        const lv={};if(lastValidated)(lastValidated.items||[]).forEach(ci=>{lv[ci.id]=ci.counted;});
+        const repItems=items.filter(i=>{
+          const counted=lv[i.id];
+          if(counted===undefined) return false;
+          return counted<getTotalAcquired(i);
+        }).map(i=>{
+          const counted=lv[i.id]??0;
+          const acq=getTotalAcquired(i);
+          const missing=acq-counted;
+          return{...i,counted,acq,missing,est:Number(i.value||0)*missing};
+        });
+        const totalEst=repItems.reduce((s,i)=>s+i.est,0);
+        return (
+          <div>
+            <div style={{...S.card({marginBottom:14,background:T.red+"08",border:`1px solid ${T.red}20`,padding:"14px 16px"})}}>
+              <div style={{fontWeight:700,color:T.red,fontSize:T.fs14,marginBottom:4}}>🔄 Programação de Reposição</div>
+              <div style={{fontSize:T.fs12,color:T.textMuted,lineHeight:1.6}}>Insumos onde a <b>última contagem validada</b> registrou quantidade <b>menor que o total adquirido</b>. Indica perda, avaria ou uso não registrado.</div>
+              {lastValidated&&<div style={{fontSize:T.fs11,color:T.textMuted,marginTop:4}}>Baseado em: {lastValidated.label} · {fmtDate(lastValidated.date)}</div>}
+            </div>
+            {!lastValidated&&<div style={{textAlign:"center",color:T.textMuted,padding:"40px 0",fontSize:T.fs13}}>Nenhuma contagem validada ainda.</div>}
+            {lastValidated&&repItems.length===0&&<div style={{textAlign:"center",color:T.green,padding:"40px 0",fontWeight:600,fontSize:T.fs14}}>✅ Nenhuma reposição necessária!</div>}
+            {repItems.map(i=>(
+              <div key={i.id} style={{...S.card({marginBottom:10,border:`1px solid ${T.red}30`,background:T.red+"04"})}}>
+                <div style={{fontWeight:700,fontSize:T.fs14,marginBottom:2}}>{i.name}</div>
+                <div style={{fontSize:T.fs11,color:T.accent,marginBottom:10}}>{i.unit}</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                  <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
+                    <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Total Adquirido</div>
+                    <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.accent}}>{i.acq}</div>
+                  </div>
+                  <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
+                    <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Última Contagem</div>
+                    <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.red}}>{i.counted}</div>
+                  </div>
+                  <div style={{background:T.red+"10",borderRadius:9,padding:"9px 8px"}}>
+                    <div style={{fontSize:T.fs10,color:T.red,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Faltando</div>
+                    <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.red}}>-{i.missing}</div>
+                  </div>
+                </div>
+                {i.value>0&&(
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:T.red+"0a",border:`1px solid ${T.red}20`,borderRadius:9,padding:"7px 10px",marginBottom:8}}>
+                    <div style={{fontSize:T.fs11,color:T.textMuted,textTransform:"uppercase",fontWeight:600}}>Valor estimado da perda</div>
+                    <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.red}}>{fmtCur(i.est)}</div>
+                  </div>
+                )}
+                <button onClick={()=>openBuy({...i,need:i.missing})} style={{...S.btn(T.red,true,true),fontSize:T.fs12}}>🔄 Registrar reposição</button>
+              </div>
+            ))}
+            {repItems.length>0&&<div style={{fontSize:T.fs11,color:T.textMuted,marginTop:4,textAlign:"center"}}>Total estimado: <b style={{color:T.red}}>{fmtCur(totalEst)}</b></div>}
+          </div>
+        );
+      })()}
+
       {subTab==="history"&&(
         <div>
           {sorted.length===0&&<div style={{textAlign:"center",color:T.textMuted,padding:"40px 0",fontSize:T.fs13}}>Nenhuma contagem registrada ainda.</div>}
@@ -918,7 +994,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                   <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:10,flexShrink:0}}>
                     <span style={{fontSize:T.fs11,color:T.accent}}>{isExp?"▲":"▼"}</span>
                     {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();validateCounting(c);}} style={S.btn(T.green,false,true)} title="Validar">✅</button>}
-                    {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();rejectCounting(c);}} style={S.btn(T.red,false,true)} title="Reprovar">❌</button>}
+                    {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();rejectCounting(c);}} style={{...S.btn(T.red,false,true),color:"#fff",fontWeight:900,fontSize:16}} title="Reprovar">✕</button>}
                     <button onClick={e=>{e.stopPropagation();setConfirm({message:`Excluir "${c.label}"?\nIsso também desfará o vínculo com o agendamento correspondente.`,onConfirm:()=>{setCountings(prev=>prev.filter(x=>x.id!==c.id));setScheduledDates(prev=>prev.map(s=>s.linkedCountingId===c.id?{...s,done:false,linkedCountingId:null}:s));setConfirm(null);}});}} style={S.btn(T.red,false,true)}>🗑</button>
                   </div>
                 </div>
@@ -983,6 +1059,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                     <div style={{fontSize:T.fs11,color:T.textMuted,marginTop:2}}>
                       {fmtDate(sd.date)}{" "}
                       {sd.done?"· ✅ Concluído (pelo contador)":ov?"· ⚠️ ATRASADA — aguardando realização":days===0?"· 📋 HOJE":`· em ${days} dia${days!==1?"s":""}`}
+                    {sd.isRecount&&sd.deadline&&!sd.done&&` · Prazo: ${fmtDate(sd.deadline)}`}
                     </div>
                     {isLocked&&<div style={{fontSize:T.fs10,color:T.yellow,marginTop:4}}>🔗 Vinculada à contagem "{linkedCounting.label}"</div>}
                   </div>
@@ -1142,7 +1219,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
       )}
 
       <div style={{display:"flex",gap:2,marginBottom:16,background:T.surface,borderRadius:10,padding:3,border:`1px solid ${T.border}`}}>
-        {[["program","🛒 Programação"],["history","📦 Compras Realizadas"]].map(([k,l])=>(
+        {[["program","🛒 Programação"],["history","📦 Compras Realizadas"],["replenishment","🔄 Reposição"]].map(([k,l])=>(
           <button key={k} onClick={()=>setSubTab(k)} style={{flex:1,background:subTab===k?T.card:"transparent",border:subTab===k?`1px solid ${T.border}`:"1px solid transparent",borderRadius:8,padding:"8px 4px",color:subTab===k?T.text:T.textMuted,fontWeight:subTab===k?700:500,fontSize:T.fs11,cursor:"pointer",fontFamily:T.fontBase}}>{l}</button>
         ))}
       </div>
@@ -1318,11 +1395,11 @@ function EvoTab({items,countings,purchases}) {
       return {qty:accQty, label:`Compra (+${p.qty})`, date:p.date, type:"purchase"};
     });
 
-    // Counting rows - ONLY validated
-    const sortedCountings=[...countings].filter(c=>c.validated).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    // Counting rows - all countings (validated shown solid, pending shown dimmed)
+    const sortedCountings=[...countings].filter(c=>!c.rejected).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
     const countingRows = sortedCountings.map(c=>{
       const ci=(c.items||[]).find(i=>i.id===si.id);
-      return{qty:ci?.counted??0, label:c.label, date:c.date, type:"counting"};
+      return{qty:ci?.counted??0, label:c.label, date:c.date, type:"counting", validated:!!c.validated};
     });
 
     // Merge and sort by date, then type (purchase before counting on same day)
@@ -1365,7 +1442,7 @@ function EvoTab({items,countings,purchases}) {
           {/* Summary card: total adquirido vs última contagem */}
           <div style={{...S.card({marginBottom:14,padding:"14px 16px",border:`1px solid ${diff===null?T.border:diff===0?T.green+"44":diff>0?T.purple+"44":T.red+"44"}`})}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontSize:T.fs12,fontWeight:700,color:T.text}}>⚖️ Total Adquirido — Última Contagem</div>
+            <div style={{fontSize:T.fs12,fontWeight:700,color:T.text}}>⚖️ Última Contagem — Total Adquirido</div>
             {si.value>0&&<div style={{fontSize:T.fs11,color:T.textMuted}}>Valor unit.: <b style={{color:T.yellow}}>{fmtCur(si.value)}</b></div>}
           </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
@@ -1416,7 +1493,9 @@ function EvoTab({items,countings,purchases}) {
                 {series.map((d,i)=>{
                   const pct=maxQ>0?(d.qty/maxQ)*100:0;
                   const isPurch=d.type==="purchase";
+                  const isValidated=d.validated!==false;
                   const bc=isPurch?T.accent:(d.qty===totalAcquired?T.green:d.qty>totalAcquired?T.purple:T.red);
+                  const opacity=isPurch||isValidated?0.85:0.4;
                   return (
                     <div key={i}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
@@ -1425,12 +1504,12 @@ function EvoTab({items,countings,purchases}) {
                           <span style={{fontSize:T.fs11,color:T.text,fontWeight:isPurch?600:400,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.label}</span>
                           {d.date&&<span style={{color:T.textMuted,fontSize:9,flexShrink:0}}>· {fmtDate(d.date)}</span>}
                         </div>
-                        <span style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:bc,flexShrink:0}}>{d.qty} <span style={{fontSize:9,color:T.textMuted}}>{si.unit}</span></span>
+                        <span style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:bc,flexShrink:0,opacity:isPurch||isValidated?1:0.5}}>{d.qty} <span style={{fontSize:9,color:T.textMuted}}>{si.unit}</span></span>
                       </div>
                       <div style={{position:"relative",height:14,background:T.surface,borderRadius:4,overflow:"hidden"}}>
-
-                        <div style={{height:"100%",width:`${pct}%`,background:bc,borderRadius:4,transition:"width .5s",opacity:.85}}/>
+                        <div style={{height:"100%",width:`${pct}%`,background:bc,borderRadius:4,transition:"width .5s",opacity}}/>
                       </div>
+                      {!isPurch&&!isValidated&&<div style={{fontSize:9,color:T.yellow,marginTop:2}}>⏳ Pendente de validação</div>}
                     </div>
                   );
                 })}
@@ -1438,9 +1517,10 @@ function EvoTab({items,countings,purchases}) {
             </div>
           )}
 
-          {series.length===0&&<div style={{textAlign:"center",color:T.textMuted,padding:"30px 0",fontSize:T.fs13}}>Nenhuma compra ou contagem registrada para este insumo.</div>}
+          {series.length===0&&lastCounting&&<div style={{textAlign:"center",color:T.textMuted,padding:"20px 0",fontSize:T.fs13}}>Nenhuma compra registrada para este insumo. O gráfico de evolução aparecerá quando houver compras registradas.</div>}
+          {series.length===0&&!lastCounting&&<div style={{textAlign:"center",color:T.textMuted,padding:"30px 0",fontSize:T.fs13}}>Nenhuma compra ou contagem validada registrada para este insumo.</div>}
 
-          {/* Comparative table */}
+          {/* Chart — show when series has data */}
           {series.length>0&&(
             <div style={S.card({padding:"14px"})}>
               <div style={{fontWeight:700,marginBottom:12,color:T.purple,fontSize:T.fs13}}>📋 Tabela Comparativa</div>
@@ -1457,6 +1537,7 @@ function EvoTab({items,countings,purchases}) {
                     {series.map((d,i)=>{
                       // diff column: for countings = counted - totalAcquired; for purchases = show accumulative qty
                       const isPurch=d.type==="purchase";
+                      const isValidated=d.validated!==false;
                       const rowDiff=isPurch?null:(d.qty-totalAcquired);
                       const diffColor=rowDiff===null?T.textMuted:rowDiff===0?T.green:rowDiff>0?T.purple:T.red;
                       const valQty=isPurch?null:Number(si.value||0)*d.qty;
@@ -1464,7 +1545,7 @@ function EvoTab({items,countings,purchases}) {
                       return(
                         <tr key={i} style={{borderBottom:`1px solid ${T.border}`}}>
                           <td style={{padding:"7px 8px",fontSize:T.fs12,whiteSpace:"nowrap"}}>
-                            <span style={{color:isPurch?T.accent:T.accent,fontWeight:600}}>{isPurch?"💰 Compra":"📋 Contagem"}</span>
+                            <span style={{color:isPurch?T.accent:isValidated?T.green:T.yellow,fontWeight:600}}>{isPurch?"💰 Compra":isValidated?"✅ Contagem":"⏳ Contagem"}</span>
                             <div style={{fontSize:T.fs10,color:T.textMuted,marginTop:1}}>{d.label}</div>
                           </td>
                           <td style={{padding:"7px 8px",color:T.textMuted,fontSize:T.fs12,whiteSpace:"nowrap"}}>{d.date?fmtDate(d.date):"—"}</td>
@@ -1484,8 +1565,8 @@ function EvoTab({items,countings,purchases}) {
                     {/* Final row: total adquirido vs última contagem */}
                     {lastCounting&&(
                       <tr style={{background:T.surface,borderTop:`2px solid ${T.border}`}}>
-                        <td colSpan={2} style={{padding:"7px 8px",fontSize:T.fs11,fontWeight:700,color:T.text}}>⚖️ Total Adquirido × Última Contagem</td>
-                        <td style={{padding:"7px 8px",fontFamily:T.fontMono,fontSize:T.fs12,color:T.text}}>{totalAcquired} - {lastCountedQty} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></td>
+                        <td colSpan={2} style={{padding:"7px 8px",fontSize:T.fs11,fontWeight:700,color:T.text}}>⚖️ Última Contagem — Total Adquirido</td>
+                        <td style={{padding:"7px 8px",fontFamily:T.fontMono,fontSize:T.fs12,color:T.text}}>{lastCountedQty} - {totalAcquired} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></td>
                         <td style={{padding:"7px 8px"}}>
                           <span style={{color:diff>=0?T.green:T.red,fontWeight:700,fontFamily:T.fontMono,fontSize:T.fs12}}>{diff>0?"+":""}{diff}</span>
                         </td>
@@ -1542,7 +1623,18 @@ function CfgTab({appPass,setAppPass,passHint,setPassHint,whatsapp,setWhatsapp}) 
 }
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
+class ErrorBoundary extends React.Component {
+  constructor(props){super(props);this.state={error:null};}
+  static getDerivedStateFromError(e){return{error:e};}
+  componentDidCatch(){this.setState({error:null});}
+  render(){return this.props.children;}
+}
+
 export default function App() {
+  return <ErrorBoundary><AppInner/></ErrorBoundary>;
+}
+
+function AppInner() {
   const data = useAppData();
   const [screen, setScreen] = useState("home");
 
@@ -1551,8 +1643,8 @@ export default function App() {
   const goManagerLogin = useCallback(() => setScreen("managerLogin"), []);
   const goCounter = useCallback(() => setScreen("counter"), []);
 
-  // Show loader only on very first load, never block navigation
-  if (data.loading && screen === "home") {
+  // Show loader only on very first load before any data, never block navigation
+  if (data.loading && screen === "home" && !data.items?.length && !data.countings?.length) {
     return (
       <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:T.fontBase}}>
         <div style={{color:T.textMuted,fontFamily:T.fontMono,fontSize:T.fs13}}>Carregando…</div>
