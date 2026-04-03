@@ -201,7 +201,7 @@ function openWA(url) {
   document.body.removeChild(a);
 }
 
-function sendWA(phone, counting, items) {
+function buildWAMsg(counting, items) {
   const lines=(counting.items||[]).map(ci=>{
     const it=items.find(i=>i.id===ci.id)||ci;
     const min=it.min?` | Mínimo: ${it.min}`:"";
@@ -210,14 +210,17 @@ function sendWA(phone, counting, items) {
   }).join("\n");
   const ab=(counting.items||[]).filter(ci=>{const it=items.find(i=>i.id===ci.id)||ci;return it.min&&ci.counted<it.min;});
   const alertas=ab.length?`\n\n⚠️ *Insumos abaixo do mínimo:*\n${ab.map(ci=>{const it=items.find(i=>i.id===ci.id)||ci;return`  • ${ci.name}: *${ci.counted??0}* (mínimo: ${it.min})`;}).join("\n")}`:"";
-  const compras=(counting.items||[]).filter(ci=>{const it=items.find(i=>i.id===ci.id)||ci;return it.min&&ci.counted<it.min;}).map(ci=>{
+  const compras=ab.map(ci=>{
     const it=items.find(i=>i.id===ci.id)||ci;
-    const need=it.max?Math.max(it.max-ci.counted,0):Math.max(it.min-ci.counted+it.min,0);
+    const need=it.max?Math.max(it.max-ci.counted,0):Math.max(it.min-ci.counted,0);
     return `  • ${ci.name}: *+${need} ${it.unit||""}*`;
   });
   const comprasMsg=compras.length?`\n\n🛒 *Necessidade de Compra:*\n${compras.join("\n")}`:"";
-  const msg=`Olá, Teresa! 😁🌟\n\nSegue o relatório da *${counting.label}* referente a ${fmtDate(counting.date)}, com as quantidades contabilizadas e a necessidade de compra conforme o levantamento realizado.\n\n📋 *Quantidades contabilizadas:*\n${lines}${alertas}${comprasMsg}\n\n_Sistema de Gestão de Contagens_`;
-  openWA(`https://wa.me/${normPhone(phone)}?text=${encodeURIComponent(msg)}`);
+  return `Olá, Teresa! 😁🌟\n\nSegue o relatório da *${counting.label}* referente a ${fmtDate(counting.date)}, com as quantidades contabilizadas e a necessidade de compra conforme o levantamento realizado.\n\n📋 *Quantidades contabilizadas:*\n${lines}${alertas}${comprasMsg}\n\n_Sistema de Gestão de Contagens_`;
+}
+
+function sendWA(phone, counting, items) {
+  openWA(`https://wa.me/${normPhone(phone)}?text=${encodeURIComponent(buildWAMsg(counting,items))}`);
 }
 
 function sendWABlocked(phone, reason, nextFuture) {
@@ -363,8 +366,9 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
   const doSend=()=>{
     const result=items.map(i=>({...i,counted:counts[i.id]??0,validated:false}));
     const counting={id:Date.now(),label,date:countDate,items:result,validated:false};
-    onSubmit(counting,nextSched);setPhase("done");
-    if(whatsapp)setTimeout(()=>sendWA(whatsapp,counting,items),500);
+    onSubmit(counting,nextSched);
+    setPhase("done");
+    if(whatsapp) openWA(`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(buildWAMsg(counting,items))}`);
   };
 
   if(!items.length) return (
@@ -523,6 +527,13 @@ function ManagerPanel({data,onBack}) {
   const {items,countings,scheduledDates,appPass,passHint,whatsapp,purchases,setItems,setCountings,setScheduledDates,setAppPass,setPassHint,setWhatsapp,setPurchases}=data;
   const TABS=["📊 Dashboard","📦 Insumos","📋 Contagens","🛒 Compras","⚙️ Config"];
   const [tab,setTab]=useState(0);
+  const [countSubTab,setCountSubTab]=useState("history");
+  const [buySubTab,setBuySubTab]=useState("program");
+  const navigate=(tabIdx,subTab=null)=>{
+    setTab(tabIdx);
+    if(tabIdx===2&&subTab) setCountSubTab(subTab);
+    if(tabIdx===3&&subTab) setBuySubTab(subTab);
+  };
   return (
     <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:T.fontBase,paddingBottom:70}}>
       <div style={{background:`linear-gradient(135deg,${T.warmDim}22,${T.bg})`,padding:"20px 18px 0",borderBottom:`1px solid ${T.border}`}}>
@@ -533,10 +544,10 @@ function ManagerPanel({data,onBack}) {
         </div>
       </div>
       <div style={{padding:"18px 16px"}}>
-        {tab===0&&<DashTab items={items} countings={countings} scheduledDates={scheduledDates} onNavigate={setTab}/>}
+        {tab===0&&<DashTab items={items} countings={countings} scheduledDates={scheduledDates} onNavigate={navigate}/>}
         {tab===1&&<ItemsTab items={items} setItems={setItems} countings={countings}/>}
-        {tab===2&&<CountTab items={items} countings={countings} setCountings={setCountings} setItems={setItems} scheduledDates={scheduledDates} setScheduledDates={setScheduledDates} purchases={purchases}/>}
-        {tab===3&&<BuyTab items={items} setItems={setItems} countings={countings} purchases={purchases} setPurchases={setPurchases}/>}
+        {tab===2&&<CountTab items={items} countings={countings} setCountings={setCountings} setItems={setItems} scheduledDates={scheduledDates} setScheduledDates={setScheduledDates} purchases={purchases} initialSubTab={countSubTab}/>}
+        {tab===3&&<BuyTab items={items} setItems={setItems} countings={countings} purchases={purchases} setPurchases={setPurchases} initialSubTab={buySubTab}/>}
         {tab===4&&<CfgTab appPass={appPass} setAppPass={setAppPass} passHint={passHint} setPassHint={setPassHint} whatsapp={whatsapp} setWhatsapp={setWhatsapp}/>}
       </div>
     </div>
@@ -596,18 +607,18 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
   return (
     <div style={{marginTop:4}}>
 
-      {/* LINHA 1: Insumos Cadastrados | Insumos Contabilizados | Diferença em Quantidade */}
+      {/* LINHA 1 */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-        <Card icon="📦" label="INSUMOS CADASTRADOS"     value={items.length}                        color={T.accent}             onClick={()=>onNavigate(1)}/>
-        <Card icon="🧮" label="INSUMOS CONTABILIZADOS"  value={lastC?ex:"—"}    sub={lastC?lastC.label:null} color={colorContabilizados}  onClick={()=>onNavigate(2)}/>
-        <Card icon="🔢" label="DIFERENÇA EM QUANTIDADE" value={lastC?`${dQ>0?"+":""}${dQ}`:"—"}    color={colorDiffQtd}          onClick={()=>onNavigate(1)}/>
+        <Card icon="📦" label="INSUMOS CADASTRADOS"     value={items.length}                     color={T.accent}            onClick={()=>onNavigate(1)}/>
+        <Card icon="🧮" label="INSUMOS CONTABILIZADOS"  value={lastC?ex:"—"} sub={lastC?lastC.label:null} color={colorContabilizados} onClick={()=>onNavigate(2)}/>
+        <Card icon="🔢" label="DIFERENÇA EM QUANTIDADE" value={lastC?`${dQ>=0?"+":""}${dQ}`:"—"} color={colorDiffQtd}         onClick={()=>onNavigate(2,"evolution")}/>
       </div>
 
-      {/* LINHA 2: Valor Total Adquirido | Valor Total Contabilizado | Diferença em Valor */}
+      {/* LINHA 2 */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-        <Card icon="💳" label="VALOR TOTAL ADQUIRIDO"      value={fmtCur(vA)}             color={T.warm}              onClick={()=>onNavigate(3)}/>
-        <Card icon="💰" label="VALOR TOTAL CONTABILIZADO"  value={fmtCur(vC)} sub={lastC?lastC.label:null} color={colorVContabilizado} onClick={()=>onNavigate(2)}/>
-        <Card icon="💹" label="DIFERENÇA EM VALOR"         value={lastC?fmtCur(dV):"—"}   color={colorDiffVal}        onClick={()=>onNavigate(3)}/>
+        <Card icon="💳" label="VALOR TOTAL ADQUIRIDO"     value={fmtCur(vA)}            color={T.accent}           onClick={()=>onNavigate(3,"history")}/>
+        <Card icon="💰" label="VALOR TOTAL CONTABILIZADO" value={fmtCur(vC)} sub={lastC?lastC.label:null} color={colorVContabilizado} onClick={()=>onNavigate(2)}/>
+        <Card icon="💹" label="DIFERENÇA EM VALOR"        value={lastC?fmtCur(dV):"—"}  color={colorDiffVal}       onClick={()=>onNavigate(3)}/>
       </div>
 
       {/* STATUS DAS QUANTIDADES */}
@@ -615,9 +626,9 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
         <div style={{marginBottom:8}}>
           <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>STATUS DAS QUANTIDADES</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-            <Card icon="⬇️" label="ITENS ABAIXO DO MÍNIMO" value={abMin}   color={T.red}    onClick={()=>onNavigate(1)}/>
-            <Card icon="✅" label="ITENS DENTRO DA MARGEM"  value={inRange} color={T.green}  onClick={()=>onNavigate(1)}/>
-            <Card icon="⬆️" label="ITENS ACIMA DO MÁXIMO"   value={acMax}   color={T.purple} onClick={()=>onNavigate(1)}/>
+            <Card icon="⬇️" label="ITENS ABAIXO DO MÍNIMO" value={abMin}   color={abMin>0?T.red:T.green}    onClick={()=>onNavigate(1)}/>
+            <Card icon="✅" label="ITENS DENTRO DA MARGEM"  value={inRange} color={inRange===items.length?T.green:inRange>0?T.green:T.red} onClick={()=>onNavigate(1)}/>
+            <Card icon="⬆️" label="ITENS ACIMA DO MÁXIMO"   value={acMax}   color={acMax===0?T.green:T.purple} onClick={()=>onNavigate(1)}/>
           </div>
         </div>
       )}
@@ -627,11 +638,11 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
         <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>STATUS DAS CONTAGENS</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           <Card
-            icon="📅"
-            label="CONTAGENS AGENDADAS"
-            value={schPending.length+schOverdue.length}
-            sub={schOverdue.length>0?`${schOverdue.length} atrasada${schOverdue.length!==1?"s":""}`:schPending.length>0?`Próx: ${fmtDate(schPending[0].date)}`:null}
-            color={schOverdue.length>0?T.red:schPending.length>0?T.yellow:T.textMuted}
+            icon="📋"
+            label="CONTAGENS REGISTRADAS"
+            value={sortedCountings.length}
+            sub={lastC?`Última: ${fmtDate(lastC.date)}`:null}
+            color={sortedCountings.length>0?T.accent:T.textMuted}
             onClick={()=>onNavigate(2)}
           />
           <Card
@@ -639,7 +650,7 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
             label="CONTAGENS VALIDADAS"
             value={countingsValidated}
             sub={countingsValidated>0&&lastC?`Última: ${fmtDate(lastC.date)}`:null}
-            color={countingsValidated>0?T.green:T.textMuted}
+            color={lastC?(countingsValidated===sortedCountings.length?T.green:T.red):T.textMuted}
             onClick={()=>onNavigate(2)}
           />
           <Card
@@ -727,7 +738,7 @@ function ItemsTab({items,setItems,countings}) {
                   {it.value>0&&<span>Valor unitário: <b style={{color:T.yellow}}>{fmtCur(it.value)}</b></span>}
                   <span>Total adquirido: <b style={{color:T.text}}>{getTotalAcquired(it)} {it.unit}</b></span>
                 </div>
-                {(it.min||it.max)&&<div style={{fontSize:T.fs12,color:T.textMuted,marginTop:4}}>{it.min?`Mínimo: ${it.min}`:""}{it.min&&it.max?" · ":""}{it.max?`Máximo: ${it.max}`:""}</div>}
+                {(it.min||it.max)&&<div style={{fontSize:T.fs12,color:T.textMuted,marginTop:4}}>{it.min?<span>Mínimo: <b style={{color:T.warm}}>{it.min}</b></span>:""}{it.min&&it.max?" · ":""}{it.max?<span>Máximo: <b style={{color:T.purple}}>{it.max}</b></span>:""}</div>}
                 {(it.purchases||[]).length>0&&(
                   <div style={{marginTop:8,background:T.surface,borderRadius:8,padding:"8px 10px"}}>
                     <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>📦 Histórico de compras</div>
@@ -756,8 +767,8 @@ function ItemsTab({items,setItems,countings}) {
 }
 
 // ─── COUNTINGS TAB ───────────────────────────────────────────────────────────
-function CountTab({items,countings,setCountings,setItems,scheduledDates,setScheduledDates,purchases}) {
-  const [subTab,setSubTab]=useState("history");
+function CountTab({items,countings,setCountings,setItems,scheduledDates,setScheduledDates,purchases,initialSubTab="history"}) {
+  const [subTab,setSubTab]=useState(initialSubTab);
   const [sel,setSel]=useState(null);
   const [schForm,setSchForm]=useState({label:"",date:""});
   const [schEditId,setSchEditId]=useState(null);
@@ -783,7 +794,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
   };
   const startEditSch=(sd)=>{setSchEditId(sd.id);setSchForm({label:sd.label,date:sd.date});};
 
-  // Validate counting → mark items as validated and update currentQty
+  // Validate counting
   const validateCounting=(c)=>{
     setCountings(prev=>prev.map(x=>x.id===c.id?{...x,validated:true,items:(x.items||[]).map(ci=>({...ci,validated:true}))}:x));
     setItems(prev=>prev.map(it=>{
@@ -793,36 +804,73 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
     }));
   };
 
+  // Reject counting → create recount
+  const rejectCounting=(c)=>{
+    const recontagemNum=(countings.filter(x=>x.originId===c.id||x.id===c.id)).length;
+    const newLabel=`RECONTAGEM ${recontagemNum}`;
+    const recount={id:Date.now(),label:newLabel,date:todayStr(),items:(c.items||[]).map(ci=>({...ci,counted:0,validated:false})),validated:false,originId:c.id,isRecount:true};
+    setCountings(prev=>prev.map(x=>x.id===c.id?{...x,rejected:true}:x));
+    setCountings(prev=>[...prev,recount]);
+    setSel(null);
+  };
+
   if(sel) return (
     <div>
       {showReport&&repC&&<ReportModal counting={repC} items={items} onClose={()=>setShowReport(false)}/>}
       <button onClick={()=>setSel(null)} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs13,marginBottom:14,padding:0}}>← Voltar</button>
       <div style={S.card({marginBottom:12})}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
           <div>
             <div style={{fontWeight:700,fontSize:T.fs15}}>{sel.label}</div>
-            <div style={{fontSize:T.fs12,color:T.textMuted,marginBottom:10}}>{fmtDate(sel.date)}</div>
+            <div style={{fontSize:T.fs12,color:T.textMuted}}>{fmtDate(sel.date)}</div>
+            {sel.isRecount&&<div style={{fontSize:T.fs11,color:T.yellow,marginTop:2}}>🔁 Recontagem originada de contagem anterior</div>}
           </div>
-          {sel.validated?<span style={S.tag(T.green)}>✅ VALIDADA</span>:<span style={S.tag(T.yellow)}>⏳ AGUARDANDO</span>}
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+            {sel.validated?<span style={S.tag(T.green)}>✅ VALIDADA</span>:sel.rejected?<span style={S.tag(T.red)}>❌ REPROVADA</span>:<span style={S.tag(T.yellow)}>⏳ AGUARDANDO</span>}
+          </div>
         </div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <button onClick={()=>{setRepC(sel);setShowReport(true);}} style={S.btn(T.accent,false,true)}>📄 Relatório</button>
-          {!sel.validated&&<button onClick={()=>validateCounting(sel)} style={S.btn(T.green,false,true)}>✅ Validar contagem</button>}
+          {!sel.validated&&!sel.rejected&&<button onClick={()=>validateCounting(sel)} style={S.btn(T.green,false,true)}>✅ Validar</button>}
+          {!sel.validated&&!sel.rejected&&<button onClick={()=>rejectCounting(sel)} style={S.btn(T.red,false,true)}>❌ Reprovar</button>}
         </div>
       </div>
-      {!sel.validated&&<div style={{...S.card({marginBottom:12,background:T.yellow+"0a",border:`1px solid ${T.yellow}30`,padding:"12px 14px"})}}>
-        <div style={{fontSize:T.fs12,color:T.yellow,lineHeight:1.6}}>⚠️ Ao validar, as quantidades contabilizadas serão registradas como <b>quantidade atual</b> de cada insumo.</div>
-      </div>}
-      <div style={{...S.sec,marginBottom:12}}>Insumos Contados</div>
-      {(sel.items||[]).map(ci=>{const it=items.find(i=>i.id===ci.id)||ci;const st=getStatus(it,ci.counted);return(
-        <div key={ci.id} style={{...S.card({marginBottom:8}),display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontWeight:600,fontSize:T.fs13}}>{ci.name||it.name}</div><div style={{fontSize:T.fs12,color:T.accent}}>{it.unit}</div></div>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{textAlign:"right"}}><div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:1}}>Quantidade Contabilizada</div><span style={{...S.mono,fontSize:T.fs20,fontWeight:700,color:T.accent}}>{ci.counted}</span></div>
-            {st&&<StatusBadge item={it} counted={ci.counted}/>}
-          </div>
+      {!sel.validated&&!sel.rejected&&(
+        <div style={{...S.card({marginBottom:12,background:T.yellow+"0a",border:`1px solid ${T.yellow}30`,padding:"12px 14px"})}}>
+          <div style={{fontSize:T.fs12,color:T.yellow,lineHeight:1.6}}>⚠️ Ao validar, as quantidades contabilizadas tornam-se a <b>quantidade atual</b> de cada insumo. Ao reprovar, será criada uma <b>Recontagem</b> vinculada a esta.</div>
         </div>
-      );})}
+      )}
+      <div style={{...S.sec,marginBottom:12}}>Insumos Contados</div>
+      {(sel.items||[]).map(ci=>{
+        const it=items.find(i=>i.id===ci.id)||ci;
+        const st=getStatus(it,ci.counted);
+        const totalAcq=getTotalAcquired(it);
+        const valContado=Number(it.value||0)*ci.counted;
+        const valAcq=Number(it.value||0)*totalAcq;
+        return(
+          <div key={ci.id} style={{...S.card({marginBottom:8})}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+              <div>
+                <div style={{fontWeight:600,fontSize:T.fs13}}>{ci.name||it.name}</div>
+                <div style={{fontSize:T.fs11,color:T.accent}}>{it.unit}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:1}}>Quantidade Contabilizada</div>
+                <span style={{...S.mono,fontSize:T.fs18,fontWeight:700,color:T.accent}}>{ci.counted}</span>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:T.fs11,color:T.textMuted}}>
+              {it.value>0&&<span>Valor unit.: <b style={{color:T.yellow}}>{fmtCur(it.value)}</b></span>}
+              {it.value>0&&<span>Valor contado: <b style={{color:T.accent}}>{fmtCur(valContado)}</b></span>}
+              <span>Total adquirido: <b style={{color:T.text}}>{totalAcq} {it.unit}</b></span>
+              {it.value>0&&<span>Valor adquirido: <b style={{color:T.warm}}>{fmtCur(valAcq)}</b></span>}
+              {it.min?<span>Mínimo: <b style={{color:T.warm}}>{it.min}</b></span>:null}
+              {it.max?<span>Máximo: <b style={{color:T.purple}}>{it.max}</b></span>:null}
+            </div>
+            {st&&<div style={{marginTop:6}}><StatusBadge item={it} counted={ci.counted}/></div>}
+          </div>
+        );
+      })}
     </div>
   );
 
@@ -852,7 +900,8 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:2}}>
                       <div style={{fontWeight:700,fontSize:T.fs14}}>{c.label}</div>
                       {isLast&&<span style={S.tag(T.green)}>ÚLTIMA</span>}
-                      {c.validated?<span style={S.tag(T.green)}>✅ VALIDADA</span>:<span style={S.tag(T.yellow)}>⏳ PENDENTE</span>}
+                      {c.isRecount&&<span style={S.tag(T.yellow)}>🔁 RECONTAGEM</span>}
+                      {c.validated?<span style={S.tag(T.green)}>✅ VALIDADA</span>:c.rejected?<span style={S.tag(T.red)}>❌ REPROVADA</span>:<span style={S.tag(T.yellow)}>⏳ PENDENTE</span>}
                     </div>
                     <div style={{fontSize:T.fs12,color:T.textMuted}}>{fmtDate(c.date)} · {ciList.length} insumo{ciList.length!==1?"s":""}</div>
                   </div>
@@ -872,17 +921,18 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                         : 0;
                       return(
                         <div key={ci.id} style={{padding:"7px 0",borderBottom:`1px solid ${T.border}`}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                             <span style={{fontSize:T.fs12,color:T.text,fontWeight:600,flex:1,marginRight:8}}>{ci.name}</span>
-                            <div style={{textAlign:"right",flexShrink:0}}>
-                              <div style={{fontFamily:"monospace",fontSize:T.fs13,fontWeight:700,color:T.accent}}>{ci.counted} <span style={{fontSize:T.fs11,color:T.textMuted}}>{ci.unit||it.unit||""}</span></div>
+                            <span style={{fontFamily:"monospace",fontSize:T.fs13,fontWeight:700,color:T.accent,flexShrink:0}}>{ci.counted} <span style={{fontSize:T.fs10,color:T.textMuted}}>{ci.unit||it.unit||""}</span></span>
+                          </div>
+                          {(it.min||it.max||need>0)&&(
+                            <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
+                              {it.min?<span style={{fontSize:T.fs11,color:T.textMuted}}>Mínimo: <b style={{color:T.warm}}>{it.min}</b></span>:null}
+                              {it.max?<span style={{fontSize:T.fs11,color:T.textMuted}}>Máximo: <b style={{color:T.purple}}>{it.max}</b></span>:null}
+                              {need>0?<span style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600}}>Necessário: <b style={{color:T.yellow}}>+{need}</b></span>:
+                                it.max?<span style={{fontSize:T.fs11,color:T.green}}>✓ Atingido</span>:null}
                             </div>
-                          </div>
-                          <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
-                            {it.max?<span style={{fontSize:T.fs11,color:T.textMuted}}>Máximo: <b style={{color:T.green}}>{it.max}</b></span>:null}
-                            {need>0?<span style={{fontSize:T.fs11,color:T.yellow,fontWeight:700}}>Necessário: +{need}</span>:
-                              it.max?<span style={{fontSize:T.fs11,color:T.green}}>✓ Atingido</span>:null}
-                          </div>
+                          )}
                         </div>
                       );
                     })}
@@ -949,8 +999,8 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
 }
 
 // ─── BUY TAB ─────────────────────────────────────────────────────────────────
-function BuyTab({items,setItems,countings,purchases,setPurchases}) {
-  const [subTab,setSubTab]=useState("program");
+function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="program"}) {
+  const [subTab,setSubTab]=useState(initialSubTab);
   const lastC=countings.length?[...countings].sort((a,b)=>b.date?.localeCompare(a.date))[0]:null;
   const lc={};if(lastC)(lastC.items||[]).forEach(ci=>{lc[ci.id]=ci.counted;});
 
@@ -1134,7 +1184,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases}) {
                         <div style={{fontSize:T.fs11,color:T.textMuted,textTransform:"uppercase",fontWeight:600}}>Valor estimado</div>
                         <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.green}}>{fmtCur(it.est)}</div>
                       </div>
-                      {(it.min||it.max)&&<div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:8}}>Mínimo: {it.min||"—"} · Máximo: {it.max||"—"}</div>}
+                      {(it.min||it.max)&&<div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:8}}>{it.min?<span>Mínimo: <b style={{color:T.warm}}>{it.min}</b></span>:""}{it.min&&it.max?" · ":""}{it.max?<span>Máximo: <b style={{color:T.purple}}>{it.max}</b></span>:""}</div>}
                       <button onClick={()=>openBuy(it)} style={{...S.btn(T.green,true,true),fontSize:T.fs12}}>🛒 Registrar compra</button>
                     </div>
                   </div>
@@ -1306,8 +1356,8 @@ function EvoTab({items,countings,purchases}) {
         <>
           {/* Summary card: total adquirido vs última contagem */}
           <div style={{...S.card({marginBottom:14,padding:"14px 16px",border:`1px solid ${diff===null?T.border:diff>=0?T.green+"44":T.red+"44"}`})}}>
-            <div style={{fontSize:T.fs12,fontWeight:700,color:T.text,marginBottom:10}}>⚖️ Comparativo: Total Adquirido × Última Contagem</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            <div style={{fontSize:T.fs12,fontWeight:700,color:T.text,marginBottom:10}}>⚖️ Total Adquirido - Última Contagem</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
               <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
                 <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Total Adquirido</div>
                 <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.warm}}>{totalAcquired}</div>
@@ -1326,12 +1376,28 @@ function EvoTab({items,countings,purchases}) {
                 <div style={{fontSize:T.fs10,color:diff===null?T.textMuted:diff>=0?T.green:T.red}}>{diff===null?"":diff>=0?"Em dia":"Abaixo do adquirido"}</div>
               </div>
             </div>
+            {si.value>0&&(
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
+                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>Valor Adquirido</div>
+                  <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:T.warm}}>{fmtCur(Number(si.value)*totalAcquired)}</div>
+                </div>
+                <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
+                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>Valor Contado</div>
+                  <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:diff===null?T.textSub:diff>=0?T.green:T.red}}>{lastCounting?fmtCur(Number(si.value)*lastCountedQty):"—"}</div>
+                </div>
+                <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
+                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>Diferença em Valor</div>
+                  <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:diff===null?T.textSub:diff>=0?T.green:T.red}}>{diff===null?"—":fmtCur(Number(si.value)*diff)}</div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Chart */}
           {series.length>0&&(
             <div style={S.card({marginBottom:14,padding:"16px 14px"})}>
-              <div style={{fontWeight:700,marginBottom:4,color:T.accent,fontSize:T.fs13}}>📊 Evolução — {si.name}</div>
+              <div style={{fontWeight:700,marginBottom:4,color:T.accent,fontSize:T.fs13}}>📊 Evolução em Quantidade e Valor</div>
               <div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:14}}>
                 🟧 Compras (acumulado) · 🟦 Contagens
                 {minR&&<span> · <span style={{color:T.red}}>│ mín ({minR})</span></span>}
@@ -1404,7 +1470,7 @@ function EvoTab({items,countings,purchases}) {
                     {lastCounting&&(
                       <tr style={{background:T.surface,borderTop:`2px solid ${T.border}`}}>
                         <td colSpan={2} style={{padding:"7px 8px",fontSize:T.fs11,fontWeight:700,color:T.text}}>⚖️ Total Adquirido × Última Contagem</td>
-                        <td style={{padding:"7px 8px",fontFamily:T.fontMono,fontSize:T.fs12,color:T.text}}>{totalAcquired} × {lastCountedQty}</td>
+                        <td style={{padding:"7px 8px",fontFamily:T.fontMono,fontSize:T.fs12,color:T.text}}>{totalAcquired} - {lastCountedQty} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></td>
                         <td style={{padding:"7px 8px"}}>
                           <span style={{color:diff>=0?T.green:T.red,fontWeight:700,fontFamily:T.fontMono,fontSize:T.fs12}}>{diff>0?"+":""}{diff}</span>
                         </td>
