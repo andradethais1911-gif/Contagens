@@ -763,7 +763,7 @@ function ItemsTab({items,setItems,countings}) {
                     <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>📦 Histórico de compras</div>
                     {(it.purchases||[]).map((p,i)=>{
                       const pc=p.pType==="initial"?T.warm:p.pType==="reposition"?T.purple:T.green;
-                      const plabel=p.pType==="initial"?"Entrada inicial":null;
+                      const plabel=p.pType==="initial"?"Entrada inicial":p.pType==="reposition"?"Reposição":null;
                       return(
                       <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2,gap:8}}>
                         <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
@@ -1056,21 +1056,28 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
   // Need = max - (counted + already_purchased), minimum 0
   const getPurchasedQty = (itemId) => (purchases||[]).filter(p=>p.itemId===itemId).reduce((s,p)=>s+Number(p.qty||0),0);
 
+  const getPostCountingPurchases=(itemId)=>{
+    // For reposition: only count purchases made after last validated counting date
+    if(!lastC) return getPurchasedQty(itemId);
+    return (purchases||[]).filter(p=>p.itemId===itemId&&(p.date||"")>=lastC.date).reduce((s,p)=>s+Number(p.qty||0),0);
+  };
   const allSug=items.filter(i=>{
     const alreadyBought=getPurchasedQty(i.id);
     const hasValidated=lc[i.id]!==undefined;
-    // base = counted qty if validated counting exists, else = total bought
-    const base=hasValidated?lc[i.id]:alreadyBought;
+    const postBought=getPostCountingPurchases(i.id);
+    // base: if validated counting → counted + post-counting purchases; else → total bought
+    const base=hasValidated?(lc[i.id]+postBought):alreadyBought;
     if(i.max&&base<i.max) return true;
     if(!i.max&&i.min&&base<i.min) return true;
     return false;
   }).map(i=>{
     const alreadyBought=getPurchasedQty(i.id);
     const hasValidated=lc[i.id]!==undefined;
-    const curBase=hasValidated?lc[i.id]:alreadyBought;
+    const postBought=getPostCountingPurchases(i.id);
+    const curBase=hasValidated?(lc[i.id]+postBought):alreadyBought;
     const isInitial=!alreadyBought&&!(i.purchases||[]).length;
     const need=i.max?Math.max(i.max-curBase,0):Math.max(i.min-curBase,0);
-    return{...i,curBase,alreadyBought,hasValidated,need,est:Number(i.value||0)*need,isInitial};
+    return{...i,curBase,alreadyBought,postBought,hasValidated,need,est:Number(i.value||0)*need,isInitial};
   }).filter(i=>i.need>0);
 
   const [sel,setSel]=useState(()=>Object.fromEntries(allSug.map(i=>[i.id,true])));
@@ -1353,77 +1360,102 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
 
 // ─── EVOLUTION TAB ───────────────────────────────────────────────────────────
 function EvoTab({items,countings,purchases}) {
-  // Default to first item if available
-  const firstItemId = items.length>0 ? String(items[0].id) : null;
-  const [selItem,setSelItem]=useState(firstItemId||"");
+  const [selItem,setSelItem]=useState("all");
+  const si = selItem==="all"?null:items.find(i=>i.id===Number(selItem));
 
-  const si = items.find(i=>i.id===Number(selItem));
-
-  // Build series for selected item:
-  // - Each purchase row (chronological) showing accumulative qty bought + date
-  // - Then each counting row showing qty counted + date
-  // Baseline for comparison = total acquired (all purchases)
+  // For single item: one purchase row (total) + validated countings
   const getSeries = () => {
     if(!si) return [];
-    const itemPurchases = [...(purchases||[])]
-      .filter(p=>p.itemId===si.id)
-      .sort((a,b)=>(a.date||"").localeCompare(b.date||""));
-
-    // Build accumulative purchase rows
-    let accQty=0;
-    const purchaseRows = itemPurchases.map(p=>{
-      accQty+=Number(p.qty||0);
-      return {qty:accQty, label:`Compra (+${p.qty})`, date:p.date, type:"purchase"};
+    const itemPurchases=[...(purchases||[])].filter(p=>p.itemId===si.id).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    const totalPurch=itemPurchases.reduce((s,p)=>s+Number(p.qty||0),0);
+    // purchase detail lines for tooltip
+    const purchDates=itemPurchases.map(p=>{
+      const label=p.pType==="initial"?"Entrada inicial":p.pType==="reposition"?"Reposição":"Compra";
+      return {text:`${fmtDate(p.date)} · +${p.qty} · ${label}`, color:p.pType==="initial"?T.warm:p.pType==="reposition"?T.purple:T.green};
     });
-
-    // Counting rows - only VALIDATED countings
-    const sortedCountings=[...countings].filter(c=>c.validated&&!c.rejected).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
-    const countingRows = sortedCountings.map(c=>{
+    const purchRow=totalPurch>0?[{qty:totalPurch,label:"Total adquirido",purchDates,type:"purchase"}]:[];
+    const sortedC=[...countings].filter(c=>c.validated&&!c.rejected).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    const countRows=sortedC.map(c=>{
       const ci=(c.items||[]).find(i=>i.id===si.id);
-      return{qty:ci?.counted??0, label:c.label, date:c.date, type:"counting", validated:true};
+      return{qty:ci?.counted??0,label:c.label,date:c.date,type:"counting"};
     });
-
-    // Merge and sort by date, then type (purchase before counting on same day)
-    const all=[...purchaseRows,...countingRows].sort((a,b)=>{
-      if((a.date||"")!==(b.date||"")) return (a.date||"").localeCompare(b.date||"");
-      return a.type==="purchase"?-1:1;
-    });
-
-    return all;
+    return [...purchRow,...countRows];
   };
 
-  const series = getSeries();
-  const totalAcquired = getTotalAcquired(si||{acquiredQty:0,purchases:[]});
-  // Last VALIDATED counting for this item
-  const lastCounting = [...countings].filter(c=>c.validated).sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0];
-  const lastCountedQty = lastCounting ? (lastCounting.items||[]).find(i=>i.id===si?.id)?.counted??0 : 0;
-  const diff = lastCounting && si ? lastCountedQty - totalAcquired : null; // contagem - adquirido
+  const series=getSeries();
+  const totalAcquired=getTotalAcquired(si||{acquiredQty:0,purchases:[]});
+  const lastCounting=[...countings].filter(c=>c.validated).sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0];
+  const lastCountedQty=lastCounting?(lastCounting.items||[]).find(i=>i.id===si?.id)?.counted??0:0;
+  const diff=lastCounting&&si?lastCountedQty-totalAcquired:null;
+  const maxQ=Math.max(...series.map(d=>d.qty),totalAcquired,lastCountedQty,1);
 
-  const maxQ = Math.max(...series.map(d=>d.qty), totalAcquired, lastCountedQty, 1);
-  const minR = si?.min||null;
-  const maxR = si?.max||null;
+  // "Todos" mode: total value across all items from last validated counting
+  const allTotalVal=items.reduce((s,i)=>s+(Number(i.value||0)*(lastCounting?(lastCounting.items||[]).find(ci=>ci.id===i.id)?.counted??0:0)),0);
+  const allTotalAcq=items.reduce((s,i)=>s+(Number(i.value||0)*getTotalAcquired(i)),0);
+  const allDiffVal=lastCounting?allTotalVal-allTotalAcq:null;
 
   return (
     <div>
-      {/* Item selector — no "all items" option */}
       <div style={{marginBottom:14}}>
         <div style={S.label}>Selecionar insumo</div>
         {items.length===0
           ? <div style={{fontSize:T.fs13,color:T.textMuted}}>Nenhum insumo cadastrado.</div>
           : <select value={selItem} onChange={e=>setSelItem(e.target.value)} style={S.input()}>
+              <option value="all">Todos os insumos</option>
               {items.map(i=><option key={i.id} value={String(i.id)}>{i.name}</option>)}
             </select>
         }
       </div>
 
-      {!si&&<div style={{textAlign:"center",color:T.textMuted,padding:"40px 0",fontSize:T.fs13}}>Selecione um insumo para ver a evolução.</div>}
+      {selItem==="all"&&(
+        <div>
+          <div style={{...S.card({marginBottom:12,padding:"14px 16px"})}}>
+            <div style={{fontWeight:700,fontSize:T.fs13,color:T.text,marginBottom:10}}>📊 Resumo geral — todos os insumos</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:lastCounting?10:0}}>
+              <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>Valor total adquirido</div>
+                <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.accent}}>{fmtCur(allTotalAcq)}</div>
+              </div>
+              <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>Valor total contabilizado</div>
+                <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:lastCounting?allDiffVal<0?T.red:allDiffVal===0?T.green:T.purple:T.textMuted}}>{lastCounting?fmtCur(allTotalVal):"—"}</div>
+                <div style={{fontSize:T.fs10,color:T.textMuted}}>{lastCounting?fmtDate(lastCounting.date):"Sem contagem validada"}</div>
+              </div>
+              <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>Diferença em valor</div>
+                <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:allDiffVal===null?T.textMuted:allDiffVal===0?T.green:allDiffVal>0?T.purple:T.red}}>{allDiffVal===null?"—":allDiffVal>0?`+${fmtCur(allDiffVal)}`:fmtCur(allDiffVal)}</div>
+              </div>
+            </div>
+            {lastCounting&&(
+              <div style={{marginTop:8}}>
+                {items.map(i=>{
+                  const ci=(lastCounting.items||[]).find(x=>x.id===i.id);
+                  const cnt=ci?.counted??0;
+                  const acq=getTotalAcquired(i);
+                  const d=cnt-acq;
+                  const dc=d===0?T.green:d>0?T.purple:T.red;
+                  return(
+                    <div key={i.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:`1px solid ${T.border}`}}>
+                      <span style={{fontSize:T.fs12,color:T.text}}>{i.name}</span>
+                      <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                        <span style={{fontSize:T.fs11,color:T.textMuted}}>Contabilizado: <b style={{color:T.text,fontFamily:T.fontMono}}>{cnt}</b></span>
+                        {i.value>0&&<span style={{fontSize:T.fs11,color:dc,fontFamily:T.fontMono,fontWeight:700}}>{d>0?"+":""}{fmtCur(d*i.value)}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {si&&(
         <>
           {/* Summary card: total adquirido vs última contagem */}
           <div style={{...S.card({marginBottom:14,padding:"14px 16px",border:`1px solid ${T.border}`})}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontSize:T.fs12,fontWeight:700,color:T.text}}>⚖️ Última contagem — total adquirido</div>
+            <div style={{fontSize:T.fs12,fontWeight:700,color:T.text}}>⚖️ Última contagem — Total adquirido</div>
             {si.value>0&&<div style={{fontSize:T.fs11,color:T.textMuted}}>Valor unitário: <b style={{color:T.yellow}}>{fmtCur(si.value)}</b></div>}
           </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
@@ -1482,15 +1514,22 @@ function EvoTab({items,countings,purchases}) {
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                         <div style={{display:"flex",alignItems:"center",gap:6,flex:1,paddingRight:8,overflow:"hidden"}}>
                           <span style={{fontSize:T.fs10,color:isPurch?T.warm:T.green,fontWeight:700,flexShrink:0}}>{isPurch?"💰":"📋"}</span>
-                          <span style={{fontSize:T.fs11,color:T.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.label}</span>
-                          {d.date&&<span style={{color:T.textMuted,fontSize:T.fs10,flexShrink:0}}>· {fmtDate(d.date)}</span>}
+                          <div style={{overflow:"hidden"}}>
+                            <span style={{fontSize:T.fs11,color:T.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"block"}}>{d.label}</span>
+                            {d.purchDates&&d.purchDates.map((pd,pi)=>(
+                              <span key={pi} style={{fontSize:T.fs10,color:pd.color,display:"block"}}>{pd.text}</span>
+                            ))}
+                            {d.date&&!d.purchDates&&<span style={{color:T.textMuted,fontSize:T.fs10,display:"block"}}>{fmtDate(d.date)}</span>}
+                          </div>
                         </div>
-                        <span style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:bc,flexShrink:0,opacity:isPurch||isValidated?1:0.5}}>{d.qty} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></span>
+                        <div style={{textAlign:"right",flexShrink:0}}>
+                          <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:bc}}>{d.qty} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></div>
+                          {si.value>0&&<div style={{fontFamily:T.fontMono,fontSize:T.fs10,color:bc,opacity:0.8}}>{fmtCur(d.qty*Number(si.value))}</div>}
+                        </div>
                       </div>
                       <div style={{position:"relative",height:14,background:T.surface,borderRadius:4,overflow:"hidden"}}>
                         <div style={{height:"100%",width:`${pct}%`,background:bc,borderRadius:4,transition:"width .5s",opacity}}/>
                       </div>
-
                     </div>
                   );
                 })}
@@ -1546,7 +1585,7 @@ function EvoTab({items,countings,purchases}) {
                     {/* Final row: total adquirido vs última contagem */}
                     {lastCounting&&(
                       <tr style={{background:T.surface,borderTop:`2px solid ${T.border}`}}>
-                        <td colSpan={2} style={{padding:"7px 8px",fontSize:T.fs11,fontWeight:700,color:T.text}}>⚖️ Última contagem — total adquirido</td>
+                        <td colSpan={2} style={{padding:"7px 8px",fontSize:T.fs11,fontWeight:700,color:T.text}}>⚖️ Última contagem — Total adquirido</td>
                         <td style={{padding:"7px 8px",fontFamily:T.fontMono,fontSize:T.fs12,color:T.text}}>{lastCountedQty} - {totalAcquired} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></td>
                         <td style={{padding:"7px 8px"}}>
                           <span style={{color:diff>=0?T.green:T.red,fontWeight:700,fontFamily:T.fontMono,fontSize:T.fs12}}>{diff>0?"+":""}{diff}</span>
