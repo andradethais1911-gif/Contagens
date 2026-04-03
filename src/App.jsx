@@ -752,7 +752,7 @@ function ItemsTab({items,setItems,countings}) {
                   {st&&<StatusBadge item={it} counted={counted}/>}
                 </div>
                 <div style={{fontSize:T.fs12,color:T.accent,marginBottom:8}}>{it.unit}</div>
-                {counted!==undefined&&<div style={{fontSize:T.fs12,marginBottom:4}}>Última contagem: <b style={{color:st?.color||T.text,fontFamily:T.fontMono}}>{counted} {it.unit}</b></div>}
+                {counted!==undefined&&<div style={{fontSize:T.fs12,marginBottom:4}}>Última contagem: <b style={{color:st?.color||T.text,fontFamily:T.fontMono}}>{counted}</b><span style={{fontSize:T.fs12,color:st?.color||T.text}}> {it.unit}</span></div>}
                 <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:T.fs12,color:T.textMuted}}>
                   {it.value>0&&<span>Valor unitário: <b style={{color:T.yellow}}>{fmtCur(it.value)}</b></span>}
                   <span>Total adquirido: <b style={{color:T.text}}>{getTotalAcquired(it)} {it.unit}</b></span>
@@ -1057,16 +1057,20 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
   const getPurchasedQty = (itemId) => (purchases||[]).filter(p=>p.itemId===itemId).reduce((s,p)=>s+Number(p.qty||0),0);
 
   const allSug=items.filter(i=>{
-    const counted=lc[i.id]??0; // 0 if no validated counting
-    if(i.max&&counted<i.max) return true;
-    if(!i.max&&i.min&&counted<i.min) return true;
+    const alreadyBought=getPurchasedQty(i.id);
+    const hasValidated=lc[i.id]!==undefined;
+    // base = counted qty if validated counting exists, else = total bought
+    const base=hasValidated?lc[i.id]:alreadyBought;
+    if(i.max&&base<i.max) return true;
+    if(!i.max&&i.min&&base<i.min) return true;
     return false;
   }).map(i=>{
-    const curBase=lc[i.id]??0;
     const alreadyBought=getPurchasedQty(i.id);
-    const need=i.max?Math.max(i.max-curBase-alreadyBought,0):Math.max(i.min-curBase-alreadyBought+i.min,0);
-    const isInitial=!(purchases||[]).some(p=>p.itemId===i.id)&&!(i.purchases||[]).length;
-    return{...i,curBase,alreadyBought,cur:curBase+alreadyBought,need,est:Number(i.value||0)*need,isInitial};
+    const hasValidated=lc[i.id]!==undefined;
+    const curBase=hasValidated?lc[i.id]:alreadyBought;
+    const isInitial=!alreadyBought&&!(i.purchases||[]).length;
+    const need=i.max?Math.max(i.max-curBase,0):Math.max(i.min-curBase,0);
+    return{...i,curBase,alreadyBought,hasValidated,need,est:Number(i.value||0)*need,isInitial};
   }).filter(i=>i.need>0);
 
   const [sel,setSel]=useState(()=>Object.fromEntries(allSug.map(i=>[i.id,true])));
@@ -1225,8 +1229,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
                         <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
                           <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,fontWeight:600}}>{it.isInitial?"Quantidade inicial":"Última contagem"}</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:it.isInitial?T.red:typeColor}}>{it.isInitial?0:it.curBase}</div>
-                          {!it.isInitial&&it.alreadyBought>0&&<div style={{fontSize:T.fs10,color:T.green}}>+{it.alreadyBought} comprado</div>}
+                          <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:it.isInitial?T.red:typeColor}}>{it.isInitial?0:it.hasValidated?it.curBase:"—"}</div>
                         </div>
                         <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
                           <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,fontWeight:600}}>Necessário</div>
@@ -1373,11 +1376,11 @@ function EvoTab({items,countings,purchases}) {
       return {qty:accQty, label:`Compra (+${p.qty})`, date:p.date, type:"purchase"};
     });
 
-    // Counting rows - all countings (validated shown solid, pending shown dimmed)
-    const sortedCountings=[...countings].filter(c=>!c.rejected).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    // Counting rows - only VALIDATED countings
+    const sortedCountings=[...countings].filter(c=>c.validated&&!c.rejected).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
     const countingRows = sortedCountings.map(c=>{
       const ci=(c.items||[]).find(i=>i.id===si.id);
-      return{qty:ci?.counted??0, label:c.label, date:c.date, type:"counting", validated:!!c.validated};
+      return{qty:ci?.counted??0, label:c.label, date:c.date, type:"counting", validated:true};
     });
 
     // Merge and sort by date, then type (purchase before counting on same day)
@@ -1463,7 +1466,7 @@ function EvoTab({items,countings,purchases}) {
           {/* Chart */}
           {series.length>0&&(
             <div style={S.card({marginBottom:14,padding:"16px 14px"})}>
-              <div style={{fontWeight:700,marginBottom:4,color:T.accent,fontSize:T.fs13}}>📊 Evolução em Quantidade e Valor</div>
+              <div style={{fontWeight:700,marginBottom:4,color:T.text,fontSize:T.fs13}}>📊 Evolução em Quantidade e Valor</div>
               <div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:14}}>
                 🟦 Compras (acumulado) · 🟩 Igual · 🟪 Acima · 🟥 Abaixo do adquirido
               </div>
@@ -1478,8 +1481,8 @@ function EvoTab({items,countings,purchases}) {
                     <div key={i}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                         <div style={{display:"flex",alignItems:"center",gap:6,flex:1,paddingRight:8,overflow:"hidden"}}>
-                          <span style={{fontSize:T.fs10,color:isPurch?T.warm:T.accent,fontWeight:700,flexShrink:0}}>{isPurch?"💰":"📋"}</span>
-                          <span style={{fontSize:T.fs11,color:T.text,fontWeight:isPurch?600:400,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.label}</span>
+                          <span style={{fontSize:T.fs10,color:isPurch?T.warm:T.green,fontWeight:700,flexShrink:0}}>{isPurch?"💰":"📋"}</span>
+                          <span style={{fontSize:T.fs11,color:T.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.label}</span>
                           {d.date&&<span style={{color:T.textMuted,fontSize:T.fs10,flexShrink:0}}>· {fmtDate(d.date)}</span>}
                         </div>
                         <span style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:bc,flexShrink:0,opacity:isPurch||isValidated?1:0.5}}>{d.qty} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></span>
@@ -1487,7 +1490,7 @@ function EvoTab({items,countings,purchases}) {
                       <div style={{position:"relative",height:14,background:T.surface,borderRadius:4,overflow:"hidden"}}>
                         <div style={{height:"100%",width:`${pct}%`,background:bc,borderRadius:4,transition:"width .5s",opacity}}/>
                       </div>
-                      {!isPurch&&!isValidated&&<div style={{fontSize:T.fs10,color:T.yellow,marginTop:2}}>⏳ Pendente de validação</div>}
+
                     </div>
                   );
                 })}
@@ -1501,7 +1504,7 @@ function EvoTab({items,countings,purchases}) {
           {/* Chart — show when series has data */}
           {series.length>0&&(
             <div style={S.card({padding:"14px"})}>
-              <div style={{fontWeight:700,marginBottom:12,color:T.purple,fontSize:T.fs13}}>📋 Tabela Comparativa</div>
+              <div style={{fontWeight:700,marginBottom:12,color:T.text,fontSize:T.fs13}}>📋 Tabela Comparativa</div>
               <div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",minWidth:320}}>
                   <thead>
@@ -1523,8 +1526,8 @@ function EvoTab({items,countings,purchases}) {
                       return(
                         <tr key={i} style={{borderBottom:`1px solid ${T.border}`}}>
                           <td style={{padding:"7px 8px",fontSize:T.fs12,whiteSpace:"nowrap"}}>
-                            <span style={{color:isPurch?T.accent:isValidated?T.green:T.yellow,fontWeight:600}}>{isPurch?"💰 Compra":isValidated?"✅ Contagem":"⏳ Contagem"}</span>
-                            <div style={{fontSize:T.fs10,color:T.textMuted,marginTop:1}}>{d.label}</div>
+                            <span style={{color:T.text,fontWeight:700}}>{isPurch?"💰 Compra":"📋 Contagem"}</span>
+                            <div style={{fontSize:T.fs10,color:T.textMuted,marginTop:1}}>{isPurch?`Total acumulado: ${d.qty}`:`Contagem (${d.label})`}</div>
                           </td>
                           <td style={{padding:"7px 8px",color:T.textMuted,fontSize:T.fs12,whiteSpace:"nowrap"}}>{d.date?fmtDate(d.date):"—"}</td>
                           <td style={{padding:"7px 8px",fontSize:T.fs12}}>
