@@ -193,21 +193,9 @@ function ReportModal({counting,items,onClose}) {
 }
 
 function openWA(url) {
-  // Try multiple methods to handle iframe sandbox restrictions
-  let opened = false;
-  try { opened = !!window.open(url, "_blank"); } catch(e) {}
-  if(!opened) {
-    try { window.top.location.href = url; opened = true; } catch(e) {}
-  }
-  if(!opened) {
-    try {
-      const a = document.createElement("a");
-      a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer";
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      opened = true;
-    } catch(e) {}
-  }
-  return opened;
+  const a=document.createElement("a");
+  a.href=url;a.target="_blank";a.rel="noopener noreferrer";
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
 }
 
 function buildWAMsg(counting, items) {
@@ -553,7 +541,7 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
 // ─── MANAGER PANEL ───────────────────────────────────────────────────────────
 function ManagerPanel({data,onBack}) {
   const {items,countings,scheduledDates,appPass,passHint,whatsapp,purchases,setItems,setCountings,setScheduledDates,setAppPass,setPassHint,setWhatsapp,setPurchases}=data;
-  const TABS=["📊 Dashboard","📦 Insumos","📋 Contagens","🛒 Compras","⚙️ Configurações"];
+  const TABS=["📊 Dashboard","📦 Insumos","📋 Contagens","🛒 Compras","🔒 Segurança","📖 Instruções"];
   const [tab,setTab]=useState(0);
   const [countSubTab,setCountSubTab]=useState("history");
   const [buySubTab,setBuySubTab]=useState("program");
@@ -577,6 +565,7 @@ function ManagerPanel({data,onBack}) {
         {tab===2&&<CountTab items={items} countings={countings} setCountings={setCountings} setItems={setItems} scheduledDates={scheduledDates} setScheduledDates={setScheduledDates} purchases={purchases} initialSubTab={countSubTab}/>}
         {tab===3&&<BuyTab items={items} setItems={setItems} countings={countings} purchases={purchases} setPurchases={setPurchases} initialSubTab={buySubTab}/>}
         {tab===4&&<CfgTab appPass={appPass} setAppPass={setAppPass} passHint={passHint} setPassHint={setPassHint} whatsapp={whatsapp} setWhatsapp={setWhatsapp}/>}
+        {tab===5&&<InstructionsTab/>}
       </div>
     </div>
   );
@@ -646,7 +635,7 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
         <Card icon="💳" label="VALOR TOTAL ADQUIRIDO"     value={fmtCur(vA)}            color={T.accent}           onClick={()=>onNavigate(3,"history")}/>
         <Card icon="💰" label="VALOR TOTAL CONTABILIZADO" value={fmtCur(vC)} sub={lastC?lastC.label:null} color={colorVContabilizado} onClick={()=>onNavigate(2)}/>
-        <Card icon="💹" label="DIFERENÇA EM VALOR"        value={lastC?fmtCur(dV):"—"}  color={colorDiffVal}       onClick={()=>onNavigate(3)}/>
+        <Card icon="💹" label="DIFERENÇA EM VALOR"        value={lastC?fmtCur(dV):"—"}  color={colorDiffVal}       onClick={()=>onNavigate(2,"evolution")}/>
       </div>
 
       {/* STATUS DAS QUANTIDADES */}
@@ -671,7 +660,7 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
             value={sortedCountings.length}
             sub={lastC?`Última: ${fmtDate(lastC.date)}`:null}
             color={sortedCountings.length>0?T.accent:T.textMuted}
-            onClick={()=>onNavigate(2)}
+            onClick={()=>onNavigate(2,"history")}
           />
           <Card
             icon="✅"
@@ -679,7 +668,7 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
             value={countingsValidated}
             sub={countingsValidated>0&&lastC?`Última: ${fmtDate(lastC.date)}`:null}
             color={lastC?(countingsValidated===sortedCountings.length?T.green:T.red):T.textMuted}
-            onClick={()=>onNavigate(2)}
+            onClick={()=>onNavigate(2,"history")}
           />
           <Card
             icon="⏳"
@@ -687,7 +676,7 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
             value={countingsPendingVal}
             sub={countingsPendingVal>0?"Aguardando validação":null}
             color={colorPendingVal}
-            onClick={()=>onNavigate(2)}
+            onClick={()=>onNavigate(2,"schedule")}
           />
         </div>
       </div>
@@ -805,6 +794,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
   const [confirm,setConfirm]=useState(null);
   const [showReport,setShowReport]=useState(false);
   const [repC,setRepC]=useState(null);
+  const [buyAlert,setBuyAlert]=useState(false);
   const SUBS=[["history","📋 Histórico"],["schedule","📅 Agendamentos"],["evolution","📈 Evolução"]];
   // Sort by id (Date.now() at creation) descending — most recently created first = ÚLTIMA
   const sorted=[...countings].sort((a,b)=>Number(b.id||0)-Number(a.id||0));
@@ -830,6 +820,12 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
       if(ci) return {...it, currentQty: ci.counted};
       return it;
     }));
+    // Check if any item is below max — if so, show buy alert
+    const needsBuy=(c.items||[]).some(ci=>{
+      const it=items.find(i=>i.id===ci.id);
+      return it&&it.max&&ci.counted<it.max;
+    });
+    if(needsBuy) setBuyAlert(true);
   };
 
   // Reject counting → schedule a recount within 48h
@@ -910,64 +906,20 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
     <div>
       {confirm&&<ConfirmModal message={confirm.message} onConfirm={confirm.onConfirm} onCancel={()=>setConfirm(null)}/>}
       {showReport&&repC&&<ReportModal counting={repC} items={items} onClose={()=>setShowReport(false)}/>}
+      {buyAlert&&(
+        <div style={{...S.card({marginBottom:12,background:T.green+"0d",border:`1px solid ${T.green}30`,padding:"12px 16px"}),display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:T.fs13,color:T.green,marginBottom:2}}>✅ Contagem validada!</div>
+            <div style={{fontSize:T.fs12,color:T.textMuted}}>Há insumos abaixo do máximo — acesse a aba Compras para ver a programação atualizada.</div>
+          </div>
+          <button onClick={()=>setBuyAlert(false)} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs16,padding:"0 0 0 12px",flexShrink:0}}>✕</button>
+        </div>
+      )}
       <div style={{display:"flex",gap:2,marginBottom:16,background:T.surface,borderRadius:10,padding:3,border:`1px solid ${T.border}`}}>
         {SUBS.map(([k,l])=><button key={k} onClick={()=>setSubTab(k)} style={{flex:1,background:subTab===k?T.card:"transparent",border:subTab===k?`1px solid ${T.border}`:"1px solid transparent",borderRadius:8,padding:"8px 4px",color:subTab===k?T.text:T.textMuted,fontWeight:subTab===k?700:500,fontSize:T.fs11,cursor:"pointer",fontFamily:T.fontBase}}>{l}</button>)}
       </div>
 
-      {subTab==="replenishment"&&(()=>{
-        const lastValidated=[...countings].filter(x=>x.validated).sort((a,b)=>Number(b.id)-Number(a.id))[0];
-        const lv={};if(lastValidated)(lastValidated.items||[]).forEach(ci=>{lv[ci.id]=ci.counted;});
-        const repItems=items.filter(i=>{
-          const counted=lv[i.id];
-          if(counted===undefined) return false;
-          return counted<getTotalAcquired(i);
-        }).map(i=>{
-          const counted=lv[i.id]??0;
-          const acq=getTotalAcquired(i);
-          const missing=acq-counted;
-          return{...i,counted,acq,missing,est:Number(i.value||0)*missing};
-        });
-        const totalEst=repItems.reduce((s,i)=>s+i.est,0);
-        return (
-          <div>
-            <div style={{...S.card({marginBottom:14,background:T.red+"08",border:`1px solid ${T.red}20`,padding:"14px 16px"})}}>
-              <div style={{fontWeight:700,color:T.red,fontSize:T.fs14,marginBottom:4}}>🔄 Programação de Reposição</div>
-              <div style={{fontSize:T.fs12,color:T.textMuted,lineHeight:1.6}}>Insumos onde a <b>última contagem validada</b> registrou quantidade <b>menor que o total adquirido</b>. Indica perda, avaria ou uso não registrado.</div>
-              {lastValidated&&<div style={{fontSize:T.fs11,color:T.textMuted,marginTop:4}}>Baseado em: {lastValidated.label} · {fmtDate(lastValidated.date)}</div>}
-            </div>
-            {!lastValidated&&<div style={{textAlign:"center",color:T.textMuted,padding:"40px 0",fontSize:T.fs13}}>Nenhuma contagem validada ainda.</div>}
-            {lastValidated&&repItems.length===0&&<div style={{textAlign:"center",color:T.green,padding:"40px 0",fontWeight:600,fontSize:T.fs14}}>✅ Nenhuma reposição necessária!</div>}
-            {repItems.map(i=>(
-              <div key={i.id} style={{...S.card({marginBottom:10,border:`1px solid ${T.red}30`,background:T.red+"04"})}}>
-                <div style={{fontWeight:700,fontSize:T.fs14,marginBottom:2}}>{i.name}</div>
-                <div style={{fontSize:T.fs11,color:T.accent,marginBottom:10}}>{i.unit}</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-                  <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
-                    <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Total Adquirido</div>
-                    <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.accent}}>{i.acq}</div>
-                  </div>
-                  <div style={{background:T.surface,borderRadius:9,padding:"9px 8px"}}>
-                    <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Última Contagem</div>
-                    <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.red}}>{i.counted}</div>
-                  </div>
-                  <div style={{background:T.red+"10",borderRadius:9,padding:"9px 8px"}}>
-                    <div style={{fontSize:T.fs10,color:T.red,marginBottom:2,textTransform:"uppercase",fontWeight:600}}>Faltando</div>
-                    <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.red}}>-{i.missing}</div>
-                  </div>
-                </div>
-                {i.value>0&&(
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:T.red+"0a",border:`1px solid ${T.red}20`,borderRadius:9,padding:"7px 10px",marginBottom:8}}>
-                    <div style={{fontSize:T.fs11,color:T.textMuted,textTransform:"uppercase",fontWeight:600}}>Valor estimado da perda</div>
-                    <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.red}}>{fmtCur(i.est)}</div>
-                  </div>
-                )}
-                <button onClick={()=>openBuy({...i,need:i.missing})} style={{...S.btn(T.red,true,true),fontSize:T.fs12}}>🔄 Registrar reposição</button>
-              </div>
-            ))}
-            {repItems.length>0&&<div style={{fontSize:T.fs11,color:T.textMuted,marginTop:4,textAlign:"center"}}>Total estimado: <b style={{color:T.red}}>{fmtCur(totalEst)}</b></div>}
-          </div>
-        );
-      })()}
+
 
       {subTab==="history"&&(
         <div>
@@ -994,8 +946,8 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:10,flexShrink:0}}>
                     <span style={{fontSize:T.fs11,color:T.accent}}>{isExp?"▲":"▼"}</span>
-                    {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();validateCounting(c);}} style={S.btn(T.green,false,true)} title="Validar">✅</button>}
-                    {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();rejectCounting(c);}} style={{...S.btn(T.red,false,true),color:"#fff",fontWeight:900,fontSize:16}} title="Reprovar">✕</button>}
+                    {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();validateCounting(c);}} style={{...S.btn(T.green,false,true),fontSize:T.fs13}} title="Validar">✅</button>}
+                    {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();rejectCounting(c);}} style={{...S.btn(T.red,false,true),fontSize:T.fs13,fontWeight:700}} title="Reprovar">✕</button>}
                     <button onClick={e=>{e.stopPropagation();setConfirm({message:`Excluir "${c.label}"?\nIsso também desfará o vínculo com o agendamento correspondente.`,onConfirm:()=>{setCountings(prev=>prev.filter(x=>x.id!==c.id));setScheduledDates(prev=>prev.map(s=>s.linkedCountingId===c.id?{...s,done:false,linkedCountingId:null}:s));setConfirm(null);}});}} style={S.btn(T.red,false,true)}>🗑</button>
                   </div>
                 </div>
@@ -1220,7 +1172,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
       )}
 
       <div style={{display:"flex",gap:2,marginBottom:16,background:T.surface,borderRadius:10,padding:3,border:`1px solid ${T.border}`}}>
-        {[["program","🛒 Programação"],["history","📦 Compras Realizadas"],["replenishment","🔄 Reposição"]].map(([k,l])=>(
+        {[["program","🛒 Programação"],["history","📦 Compras Realizadas"]].map(([k,l])=>(
           <button key={k} onClick={()=>setSubTab(k)} style={{flex:1,background:subTab===k?T.card:"transparent",border:subTab===k?`1px solid ${T.border}`:"1px solid transparent",borderRadius:8,padding:"8px 4px",color:subTab===k?T.text:T.textMuted,fontWeight:subTab===k?700:500,fontSize:T.fs11,cursor:"pointer",fontFamily:T.fontBase}}>{l}</button>
         ))}
       </div>
@@ -1619,6 +1571,101 @@ function CfgTab({appPass,setAppPass,passHint,setPassHint,whatsapp,setWhatsapp}) 
         {wMsg&&<div style={{color:wMsg.ok?T.green:T.red,fontSize:T.fs12,marginBottom:10,fontWeight:600}}>{wMsg.text}</div>}
         <button onClick={savePhone} style={S.btn(T.green)}>💾 Salvar número</button>
       </div>
+    </div>
+  );
+}
+
+// ─── INSTRUCTIONS TAB ────────────────────────────────────────────────────────
+function InstructionsTab() {
+  const [sub,setSub]=useState("gerente");
+  const SUBS=[["gerente","🔐 Área do Gerente"],["contador","🧮 Área do Contador"]];
+
+  const P=({children})=><p style={{fontSize:T.fs13,color:T.textSub,lineHeight:1.8,margin:"0 0 12px 0"}}>{children}</p>;
+  const Li=({children})=>(
+    <div style={{display:"flex",gap:10,marginBottom:10,alignItems:"flex-start"}}>
+      <span style={{color:T.accent,fontWeight:700,flexShrink:0,marginTop:1}}>→</span>
+      <span style={{fontSize:T.fs13,color:T.text,lineHeight:1.7}}>{children}</span>
+    </div>
+  );
+  const Blk=({title,children,color=T.accent})=>(
+    <div style={{...S.card({marginBottom:12,padding:"14px 16px"})}}>
+      <div style={{fontWeight:700,fontSize:T.fs13,color,marginBottom:10}}>{title}</div>
+      {children}
+    </div>
+  );
+  const Tip=({text,color=T.yellow})=>(
+    <div style={{background:color+"0d",border:`1px solid ${color}25`,borderRadius:8,padding:"10px 13px",fontSize:T.fs12,color,lineHeight:1.7,marginTop:4}}>{text}</div>
+  );
+  const HL=({children,color=T.accent})=><b style={{color}}>{children}</b>;
+
+  return(
+    <div>
+      {/* Sub-tab selector — same style as Contagens */}
+      <div style={{display:"flex",gap:2,marginBottom:16,background:T.surface,borderRadius:10,padding:3,border:`1px solid ${T.border}`}}>
+        {SUBS.map(([k,l])=>(
+          <button key={k} onClick={()=>setSub(k)} style={{flex:1,background:sub===k?T.card:"transparent",border:sub===k?`1px solid ${T.border}`:"1px solid transparent",borderRadius:8,padding:"8px 4px",color:sub===k?T.text:T.textMuted,fontWeight:sub===k?700:500,fontSize:T.fs11,cursor:"pointer",fontFamily:T.fontBase}}>{l}</button>
+        ))}
+      </div>
+
+      {sub==="gerente"&&(
+        <div>
+          <Blk title="📦 Aba Insumos" color={T.green}>
+            <P>Ponto de partida de tudo. Aqui você registra cada item que compõe o estoque — toalhas, roupões etc.</P>
+            <Li>Informe o <HL>nome</HL> (em maiúsculas), a <HL>unidade</HL> de medida, o <HL>valor unitário</HL>, a quantidade <HL color={T.warm}>mínima</HL> e a <HL color={T.purple}>máxima</HL>.</Li>
+            <Li>O <HL color={T.warm}>mínimo</HL> é o piso de alerta — abaixo dele, o item aparece em vermelho no dashboard e nas contagens. O <HL color={T.purple}>máximo</HL> é o nível ideal de abastecimento que a programação de compras usa como meta.</Li>
+            <Li>O histórico de compras de cada insumo fica visível diretamente no card, organizado por data.</Li>
+            <Tip text="⚠️ Sem mínimo e máximo definidos, o sistema não consegue sugerir compras nem alertar sobre estoque crítico." color={T.yellow}/>
+          </Blk>
+
+          <Blk title="📋 Aba Contagens" color={T.accent}>
+            <P>Dividida em três seções acessíveis pelas abas internas.</P>
+            <Li><HL>Histórico</HL> — lista todas as contagens registradas. Clique em qualquer uma para ver o detalhamento completo: quantidades contadas, valor unitário, valor total contado, total adquirido, mínimo e máximo de cada insumo.</Li>
+            <Li><HL>Agendamentos</HL> — crie agendamentos com nome e data. Somente na data agendada (ou em datas que já passaram sem realização) o contador consegue acessar a contagem. Ao reprovar, um agendamento de recontagem é criado automaticamente.</Li>
+            <Li><HL>Evolução</HL> — gráfico e tabela comparando compras e contagens por insumo ao longo do tempo.</Li>
+            <Tip text="✅ Validar torna o resultado oficial. ❌ Reprovar cria uma recontagem com prazo de 48 horas a partir da reprovação." color={T.green}/>
+          </Blk>
+
+          <Blk title="🛒 Aba Compras" color={T.warm}>
+            <P>Gerencia o abastecimento do estoque em duas visões.</P>
+            <Li><HL>Programação</HL> — lista automática dos insumos que precisam ser comprados para atingir a quantidade máxima. O cálculo desconta compras já registradas que ainda não foram contempladas em uma nova contagem. <HL>O gerente indica a quantidade que será comprada</HL> ao registrar cada compra.</Li>
+            <Li><HL>Compras Realizadas</HL> — histórico completo agrupado por insumo, com totais de quantidade e valor. Permite selecionar itens para calcular o gasto por grupo.</Li>
+            <Tip text="💡 As sugestões de compra são baseadas na última contagem. Quanto mais frequentes e validadas as contagens, mais precisas as sugestões." color={T.accent}/>
+          </Blk>
+
+          <Blk title="🔒 Aba Segurança" color={T.warm}>
+            <Li>Altere a <HL>senha</HL> de acesso à Área do Gerente. A senha padrão inicial é <span style={{fontFamily:T.fontMono,color:T.accent,fontSize:T.fs12}}>Teresa</span>.</Li>
+            <Li>Adicione uma <HL>dica de senha</HL> visível na tela de login — útil para recuperação sem precisar de suporte técnico.</Li>
+            <Li>Configure o <HL>número de WhatsApp</HL> do gerente para receber os relatórios. Informe com DDI + DDD + número, sem espaços. Exemplo: <span style={{fontFamily:T.fontMono,color:T.accent,fontSize:T.fs12}}>5586999990000</span>.</Li>
+          </Blk>
+        </div>
+      )}
+
+      {sub==="contador"&&(
+        <div>
+          <Blk title="Como acessar" color={T.accent}>
+            <P>O contador acessa o sistema pela tela inicial, sem necessidade de senha. O acesso à contagem é liberado automaticamente apenas nas datas agendadas pelo gerente.</P>
+            <Li>Se não houver contagem agendada para hoje, a tela ficará <HL color={T.red}>bloqueada</HL>. Use o botão de WhatsApp disponível nessa tela para avisar o gerente diretamente.</Li>
+            <Li>Se houver uma contagem atrasada (agendada em data anterior e ainda não realizada), ela também fica disponível para realização.</Li>
+            <Tip text="📲 O botão de WhatsApp na tela bloqueada abre o app com a mensagem já preenchida explicando a situação ao gerente." color={T.green}/>
+          </Blk>
+
+          <Blk title="Como realizar a contagem" color={T.accent}>
+            <Li><HL>1. Inicie</HL> — toque em Iniciar na tela de preparo. Os insumos aparecerão um por um.</Li>
+            <Li><HL>2. Conte</HL> — vá fisicamente até o local de cada item e conte a quantidade presente. Não estime.</Li>
+            <Li><HL>3. Registre</HL> — digite a quantidade no teclado numérico e toque em ✓ para confirmar o item.</Li>
+            <Li><HL>4. Navegue</HL> — use as miniaturas no rodapé para ir a qualquer item já visitado ou corrigir um valor confirmado.</Li>
+            <Li><HL>5. Envie</HL> — ao confirmar todos os itens, toque em Enviar. A contagem é salva e aparece o botão para encaminhar o relatório ao gerente via WhatsApp.</Li>
+            <Tip text="⚠️ A contagem só é salva no sistema após tocar em Enviar. Não feche o aplicativo antes de concluir esse passo." color={T.red}/>
+          </Blk>
+
+          <Blk title="Após enviar" color={T.green}>
+            <P>Após o envio, a contagem fica com status <HL color={T.yellow}>Pendente</HL> até que o gerente a analise.</P>
+            <Li>Se o gerente <HL color={T.green}>validar</HL>, os valores contados passam a ser o estoque oficial e o agendamento é concluído.</Li>
+            <Li>Se o gerente <HL color={T.red}>reprovar</HL>, um novo agendamento de <HL>Recontagem</HL> é criado automaticamente para o mesmo dia, com prazo de até 48 horas para realização.</Li>
+            <Li>A recontagem funciona exatamente como uma contagem normal — aparecerá disponível na data agendada.</Li>
+          </Blk>
+        </div>
+      )}
     </div>
   );
 }
