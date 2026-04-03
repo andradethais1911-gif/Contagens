@@ -752,7 +752,7 @@ function ItemsTab({items,setItems,countings}) {
                   {st&&<StatusBadge item={it} counted={counted}/>}
                 </div>
                 <div style={{fontSize:T.fs12,color:T.accent,marginBottom:8}}>{it.unit}</div>
-                {counted!==undefined&&<div style={{fontSize:T.fs12,marginBottom:4}}>Última contagem: <b style={{color:st?.color||T.text,fontFamily:T.fontMono}}>{counted}</b><span style={{fontSize:T.fs12,color:st?.color||T.text}}> {it.unit}</span></div>}
+                {counted!==undefined&&<div style={{fontSize:T.fs12,marginBottom:4}}>Última contagem: <b style={{color:st?.color||T.text}}>{counted} {it.unit}</b></div>}
                 <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:T.fs12,color:T.textMuted}}>
                   {it.value>0&&<span>Valor unitário: <b style={{color:T.yellow}}>{fmtCur(it.value)}</b></span>}
                   <span>Total adquirido: <b style={{color:T.text}}>{getTotalAcquired(it)} {it.unit}</b></span>
@@ -877,7 +877,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
           <div style={{fontSize:T.fs12,color:T.yellow,lineHeight:1.6}}>⚠️ Ao validar, as quantidades contabilizadas tornam-se a <b>quantidade atual</b> de cada insumo. Ao reprovar, será criada uma <b>Recontagem</b> vinculada a esta.</div>
         </div>
       )}
-      <div style={{...S.sec,marginBottom:12}}>Insumos Contados</div>
+      <div style={{...S.sec,marginBottom:12}}>Insumos contabilizados</div>
       {(sel.items||[]).map(ci=>{
         const it=items.find(i=>i.id===ci.id)||ci;
         const st=getStatus(it,ci.counted);
@@ -892,13 +892,13 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                 <div style={{fontSize:T.fs11,color:T.accent}}>{it.unit}</div>
               </div>
               <div style={{textAlign:"right"}}>
-                <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:1}}>Quantidade Contabilizada</div>
+                <div style={{fontSize:T.fs10,color:T.textMuted,marginBottom:1}}>Quantidade contabilizada</div>
                 <span style={{...S.mono,fontSize:T.fs18,fontWeight:700,color:T.accent}}>{ci.counted}</span>
               </div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:T.fs11,color:T.textMuted}}>
               {it.value>0&&<span>Valor unitário: <b style={{color:T.yellow}}>{fmtCur(it.value)}</b></span>}
-              {it.value>0&&<span>Valor contado: <b style={{color:T.accent}}>{fmtCur(valContado)}</b></span>}
+              {it.value>0&&<span>Valor contabilizado: <b style={{color:T.accent}}>{fmtCur(valContado)}</b></span>}
               <span>Total adquirido: <b style={{color:T.text}}>{totalAcq} {it.unit}</b></span>
               {it.value>0&&<span>Valor adquirido: <b style={{color:T.warm}}>{fmtCur(valAcq)}</b></span>}
               {it.min?<span>Mínimo: <b style={{color:T.warm}}>{it.min}</b></span>:null}
@@ -947,7 +947,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                   <div style={{flex:1}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:2}}>
                       <div style={{fontWeight:700,fontSize:T.fs14}}>{c.label}</div>
-                      {isLast&&<span style={S.tag(T.green)}>ÚLTIMA</span>}
+                      {isLast&&<span style={S.tag(T.green)}>ÚLTIMA CONTAGEM</span>}
                       {c.isRecount&&<span style={S.tag(T.yellow)}>🔁 RECONTAGEM</span>}
                       {c.validated?<span style={S.tag(T.green)}>✅ VALIDADA</span>:c.rejected?<span style={S.tag(T.red)}>❌ REPROVADA</span>:<span style={S.tag(T.yellow)}>⏳ PENDENTE</span>}
                     </div>
@@ -979,7 +979,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                               {it.min?<span style={{fontSize:T.fs11,color:T.textMuted}}>Mínimo: <b style={{color:T.warm}}>{it.min}</b></span>:null}
                               {it.max?<span style={{fontSize:T.fs11,color:T.textMuted}}>Máximo: <b style={{color:T.purple}}>{it.max}</b></span>:null}
                               {need>0?<span style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600}}>Necessário: <b style={{color:T.yellow}}>+{need}</b></span>:
-                                it.max?<span style={{fontSize:T.fs11,color:T.green}}>✓ Atingido</span>:null}
+                                null}
                             </div>
                           )}
                         </div>
@@ -1198,7 +1198,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
       {subTab==="program"&&(
         <div>
           <div style={{...S.card({marginBottom:12,background:T.accent+"08",border:`1px solid ${T.border}`,padding:"11px 14px"})}}>
-            <div style={{fontSize:T.fs12,color:T.textMuted,marginBottom:6}}>{lastC?<>Baseado em: <b style={{color:T.text}}>{lastC.label}</b> · {fmtDate(lastC.date)} · Itens abaixo do máximo, descontando compras já registradas.</>:<>Itens abaixo do máximo. Realize contagens para manter as sugestões precisas.</>}</div>
+            <div style={{fontSize:T.fs12,color:T.textMuted,marginBottom:6}}>{lastC?<>Baseado em: <b style={{color:T.text}}>{lastC.label}</b> · {fmtDate(lastC.date)} · Itens com estoque abaixo do máximo.</>:<>Itens com estoque abaixo do máximo. Realize contagens regularmente para manter as sugestões precisas.</>}</div>
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
               <span style={{fontSize:T.fs10,color:T.warm,fontWeight:600}}>■ Entrada inicial</span>
               <span style={{fontSize:T.fs10,color:T.purple,fontWeight:600}}>■ Reposição</span>
@@ -1245,7 +1245,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
                         <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.green}}>{fmtCur(it.est)}</div>
                       </div>
                       {(it.min||it.max)&&<div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:8}}>{it.min?<span>Mínimo: <b style={{color:T.warm}}>{it.min}</b></span>:""}{it.min&&it.max?" · ":""}{it.max?<span>Máximo: <b style={{color:T.purple}}>{it.max}</b></span>:""}</div>}
-                      <button onClick={()=>openBuy(it)} style={{...S.btn(T.green,true,true),fontSize:T.fs12}}>🛒 Registrar compra</button>
+                      <button onClick={()=>sel[it.id]?openBuy(it):null} style={{...S.btn(sel[it.id]?T.green:T.textMuted,true,true),fontSize:T.fs12,opacity:sel[it.id]?1:0.4,cursor:sel[it.id]?"pointer":"not-allowed"}}>🛒 Registrar compra</button>
                     </div>
                   </div>
                 </div>
@@ -1423,7 +1423,7 @@ function EvoTab({items,countings,purchases}) {
           {/* Summary card: total adquirido vs última contagem */}
           <div style={{...S.card({marginBottom:14,padding:"14px 16px",border:`1px solid ${T.border}`})}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontSize:T.fs12,fontWeight:700,color:T.text}}>⚖️ Última Contagem — Total Adquirido</div>
+            <div style={{fontSize:T.fs12,fontWeight:700,color:T.text}}>⚖️ Última contagem — total adquirido</div>
             {si.value>0&&<div style={{fontSize:T.fs11,color:T.textMuted}}>Valor unitário: <b style={{color:T.yellow}}>{fmtCur(si.value)}</b></div>}
           </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
@@ -1452,7 +1452,7 @@ function EvoTab({items,countings,purchases}) {
                   <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:T.accent}}>{fmtCur(Number(si.value)*totalAcquired)}</div>
                 </div>
                 <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
-                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:2}}>Valor contado</div>
+                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:2}}>Valor contabilizado</div>
                   <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:diff===null?T.textSub:lastCountedQty<totalAcquired?T.red:lastCountedQty===totalAcquired?T.green:T.purple}}>{lastCounting?fmtCur(Number(si.value)*lastCountedQty):"—"}</div>
                 </div>
                 <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
@@ -1466,7 +1466,7 @@ function EvoTab({items,countings,purchases}) {
           {/* Chart */}
           {series.length>0&&(
             <div style={S.card({marginBottom:14,padding:"16px 14px"})}>
-              <div style={{fontWeight:700,marginBottom:4,color:T.text,fontSize:T.fs13}}>📊 Evolução em Quantidade e Valor</div>
+              <div style={{fontWeight:700,marginBottom:4,color:T.text,fontSize:T.fs13}}>📊 Evolução em quantidade e valor</div>
               <div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:14}}>
                 🟦 Compras (acumulado) · 🟩 Igual · 🟪 Acima · 🟥 Abaixo do adquirido
               </div>
@@ -1504,7 +1504,7 @@ function EvoTab({items,countings,purchases}) {
           {/* Chart — show when series has data */}
           {series.length>0&&(
             <div style={S.card({padding:"14px"})}>
-              <div style={{fontWeight:700,marginBottom:12,color:T.text,fontSize:T.fs13}}>📋 Tabela Comparativa</div>
+              <div style={{fontWeight:700,marginBottom:12,color:T.text,fontSize:T.fs13}}>📋 Tabela comparativa</div>
               <div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",minWidth:320}}>
                   <thead>
@@ -1546,7 +1546,7 @@ function EvoTab({items,countings,purchases}) {
                     {/* Final row: total adquirido vs última contagem */}
                     {lastCounting&&(
                       <tr style={{background:T.surface,borderTop:`2px solid ${T.border}`}}>
-                        <td colSpan={2} style={{padding:"7px 8px",fontSize:T.fs11,fontWeight:700,color:T.text}}>⚖️ Última Contagem — Total Adquirido</td>
+                        <td colSpan={2} style={{padding:"7px 8px",fontSize:T.fs11,fontWeight:700,color:T.text}}>⚖️ Última contagem — total adquirido</td>
                         <td style={{padding:"7px 8px",fontFamily:T.fontMono,fontSize:T.fs12,color:T.text}}>{lastCountedQty} - {totalAcquired} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></td>
                         <td style={{padding:"7px 8px"}}>
                           <span style={{color:diff>=0?T.green:T.red,fontWeight:700,fontFamily:T.fontMono,fontSize:T.fs12}}>{diff>0?"+":""}{diff}</span>
@@ -1663,7 +1663,7 @@ function InstructionsTab() {
 
           <Acc id="contagens" title="📋 Aba Contagens" color={T.warm}>
             <P>Dividida em três seções acessíveis pelas abas internas.</P>
-            <Li><HL>Histórico</HL> — lista todas as contagens registradas. Clique em qualquer uma para ver o detalhamento completo: quantidades contadas, valor unitário, valor total contado, total adquirido, mínimo e máximo de cada insumo.</Li>
+            <Li><HL>Histórico</HL> — lista todas as contagens registradas. Clique em qualquer uma para ver o detalhamento completo: quantidades contabilizadas, valor unitário, valor total contabilizado, total adquirido, mínimo e máximo de cada insumo.</Li>
             <Li><HL>Agendamentos</HL> — crie agendamentos com nome e data. Somente na data agendada (ou em datas que já passaram sem realização) o contador consegue acessar a contagem. Ao reprovar, um agendamento de recontagem é criado automaticamente.</Li>
             <Li><HL>Evolução</HL> — gráfico e tabela comparando compras e contagens por insumo ao longo do tempo.</Li>
             <Tip text="✅ Validar torna o resultado oficial. ❌ Reprovar cria uma recontagem com prazo de 48 horas a partir da reprovação." color={T.green}/>
@@ -1704,7 +1704,7 @@ function InstructionsTab() {
 
           <Acc id="aposenvio" title="O que acontece após o envio?" color={T.accent}>
             <P>Após o envio, a contagem fica com status <HL color={T.yellow}>Pendente</HL> até que o gerente a analise.</P>
-            <Li>Se o gerente <HL color={T.green}>validar</HL>, os valores contados passam a ser o estoque oficial e o agendamento é concluído.</Li>
+            <Li>Se o gerente <HL color={T.green}>validar</HL>, os valores contabilizados passam a ser o estoque oficial e o agendamento é concluído.</Li>
             <Li>Se o gerente <HL color={T.red}>reprovar</HL>, um novo agendamento de <HL>Recontagem</HL> é criado automaticamente para o mesmo dia, com prazo de até 48 horas para realização.</Li>
             <Li>A recontagem funciona exatamente como uma contagem normal — aparecerá disponível na data agendada.</Li>
           </Acc>
