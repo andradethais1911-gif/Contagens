@@ -531,7 +531,7 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
 // ─── MANAGER PANEL ───────────────────────────────────────────────────────────
 function ManagerPanel({data,onBack}) {
   const {items,countings,scheduledDates,appPass,passHint,whatsapp,purchases,setItems,setCountings,setScheduledDates,setAppPass,setPassHint,setWhatsapp,setPurchases}=data;
-  const TABS=["📊 Dashboard","📦 Insumos","📋 Contagens","🛒 Compras","⚙️ Config"];
+  const TABS=["📊 Dashboard","📦 Insumos","📋 Contagens","🛒 Compras","⚙️ Configurações"];
   const [tab,setTab]=useState(0);
   const [countSubTab,setCountSubTab]=useState("history");
   const [buySubTab,setBuySubTab]=useState("program");
@@ -617,7 +617,7 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
         <Card icon="📦" label="INSUMOS CADASTRADOS"     value={items.length}                     color={T.accent}            onClick={()=>onNavigate(1)}/>
         <Card icon="🧮" label="INSUMOS CONTABILIZADOS"  value={lastC?ex:"—"} sub={lastC?lastC.label:null} color={colorContabilizados} onClick={()=>onNavigate(2)}/>
-        <Card icon="🔢" label="DIFERENÇA EM QUANTIDADE" value={lastC?`${dQ>=0?"+":""}${dQ}`:"—"} color={colorDiffQtd}         onClick={()=>onNavigate(2,"evolution")}/>
+        <Card icon="🔢" label="DIFERENÇA EM QUANTIDADE" value={lastC?`${dQ>0?"+":""}${dQ}`:"—"} color={colorDiffQtd}         onClick={()=>onNavigate(2,"evolution")}/>
       </div>
 
       {/* LINHA 2 */}
@@ -810,13 +810,17 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
     }));
   };
 
-  // Reject counting → create recount
+  // Reject counting → schedule a recount within 48h
   const rejectCounting=(c)=>{
-    const recontagemNum=(countings.filter(x=>x.originId===c.id||x.id===c.id)).length;
+    const recontagemNum=(scheduledDates||[]).filter(x=>x.isRecount&&x.originCountingId===c.id).length+1;
     const newLabel=`RECONTAGEM ${recontagemNum}`;
-    const recount={id:Date.now(),label:newLabel,date:todayStr(),items:(c.items||[]).map(ci=>({...ci,counted:0,validated:false})),validated:false,originId:c.id,isRecount:true};
+    // deadline = today + 2 days
+    const d=new Date(); d.setDate(d.getDate()+2);
+    const y=d.getFullYear(); const mo=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0');
+    const deadline=`${y}-${mo}-${day}`;
+    const newSched={id:Date.now(),label:newLabel,date:deadline,done:false,isRecount:true,originCountingId:c.id};
+    setScheduledDates(prev=>[...prev,newSched]);
     setCountings(prev=>prev.map(x=>x.id===c.id?{...x,rejected:true}:x));
-    setCountings(prev=>[...prev,recount]);
     setSel(null);
   };
 
@@ -915,9 +919,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                     <span style={{fontSize:T.fs11,color:T.accent}}>{isExp?"▲":"▼"}</span>
                     {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();validateCounting(c);}} style={S.btn(T.green,false,true)} title="Validar">✅</button>}
                     {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();rejectCounting(c);}} style={S.btn(T.red,false,true)} title="Reprovar">❌</button>}
-                    {c.validated
-  ?<button disabled style={{...S.btn(T.textMuted,false,true),opacity:.35,cursor:"not-allowed"}} title="Contagem validada não pode ser excluída">🗑</button>
-  :<button onClick={e=>{e.stopPropagation();setConfirm({message:`Excluir "${c.label}"?\nIsso também desfará o vínculo com o agendamento correspondente.`,onConfirm:()=>{setCountings(prev=>prev.filter(x=>x.id!==c.id));setScheduledDates(prev=>prev.map(s=>s.linkedCountingId===c.id?{...s,done:false,linkedCountingId:null}:s));setConfirm(null);}});}} style={S.btn(T.red,false,true)}>🗑</button>}
+                    <button onClick={e=>{e.stopPropagation();setConfirm({message:`Excluir "${c.label}"?\nIsso também desfará o vínculo com o agendamento correspondente.`,onConfirm:()=>{setCountings(prev=>prev.filter(x=>x.id!==c.id));setScheduledDates(prev=>prev.map(s=>s.linkedCountingId===c.id?{...s,done:false,linkedCountingId:null}:s));setConfirm(null);}});}} style={S.btn(T.red,false,true)}>🗑</button>
                   </div>
                 </div>
                 {/* Expandable items */}
@@ -982,14 +984,11 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                       {fmtDate(sd.date)}{" "}
                       {sd.done?"· ✅ Concluído (pelo contador)":ov?"· ⚠️ ATRASADA — aguardando realização":days===0?"· 📋 HOJE":`· em ${days} dia${days!==1?"s":""}`}
                     </div>
-                    {isLocked&&<div style={{fontSize:T.fs10,color:linkedCounting?.validated?T.red:T.yellow,marginTop:4}}>🔒 {linkedCounting?.validated?"Contagem validada — agendamento permanente":"Vinculada à contagem \""+linkedCounting.label+"\" — exclua a contagem para liberar"}</div>}
+                    {isLocked&&<div style={{fontSize:T.fs10,color:T.yellow,marginTop:4}}>🔗 Vinculada à contagem "{linkedCounting.label}"</div>}
                   </div>
                   <div style={{display:"flex",gap:6,marginLeft:8}}>
                     {!sd.done&&!isLocked&&<button onClick={()=>startEditSch(sd)} style={S.btn(T.accent,false,true)}>✏️</button>}
-                    {isLocked
-                      ? <button disabled style={{...S.btn(T.textMuted,false,true),opacity:.4,cursor:"not-allowed"}} title={linkedCounting?.validated?"Contagem validada: não pode excluir":"Exclua a contagem vinculada primeiro"}>🗑</button>
-                      : <button onClick={()=>setConfirm({message:`Excluir agendamento "${sd.label}"?`,onConfirm:()=>{setScheduledDates(prev=>prev.filter(s=>s.id!==sd.id));setConfirm(null);}})} style={S.btn(T.red,false,true)}>🗑</button>
-                    }
+                    <button onClick={()=>setConfirm({message:`Excluir agendamento "${sd.label}"?${isLocked?" A contagem vinculada não será excluída automaticamente.":""}`,onConfirm:()=>{setScheduledDates(prev=>prev.filter(s=>s.id!==sd.id));setConfirm(null);}})} style={S.btn(T.red,false,true)}>🗑</button>
                   </div>
                 </div>
               </div>
@@ -1340,7 +1339,7 @@ function EvoTab({items,countings,purchases}) {
   // Last VALIDATED counting for this item
   const lastCounting = [...countings].filter(c=>c.validated).sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0];
   const lastCountedQty = lastCounting ? (lastCounting.items||[]).find(i=>i.id===si?.id)?.counted??0 : 0;
-  const diff = lastCounting && si ? totalAcquired - lastCountedQty : null; // compra - contagem
+  const diff = lastCounting && si ? lastCountedQty - totalAcquired : null; // contagem - adquirido
 
   const maxQ = Math.max(...series.map(d=>d.qty), totalAcquired, lastCountedQty, 1);
   const minR = si?.min||null;
@@ -1364,40 +1363,43 @@ function EvoTab({items,countings,purchases}) {
       {si&&(
         <>
           {/* Summary card: total adquirido vs última contagem */}
-          <div style={{...S.card({marginBottom:14,padding:"14px 16px",border:`1px solid ${diff===null?T.border:diff>=0?T.green+"44":T.red+"44"}`})}}>
-            <div style={{fontSize:T.fs12,fontWeight:700,color:T.text,marginBottom:10}}>⚖️ Total Adquirido - Última Contagem</div>
+          <div style={{...S.card({marginBottom:14,padding:"14px 16px",border:`1px solid ${diff===null?T.border:diff===0?T.green+"44":diff>0?T.purple+"44":T.red+"44"}`})}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{fontSize:T.fs12,fontWeight:700,color:T.text}}>⚖️ Total Adquirido — Última Contagem</div>
+            {si.value>0&&<div style={{fontSize:T.fs11,color:T.textMuted}}>Valor unit.: <b style={{color:T.yellow}}>{fmtCur(si.value)}</b></div>}
+          </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
               <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
                 <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Total Adquirido</div>
-                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.warm}}>{totalAcquired}</div>
+                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.accent}}>{totalAcquired}</div>
                 <div style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</div>
               </div>
               <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
                 <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Última Contagem</div>
-                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:diff===null?T.textSub:diff>=0?T.green:T.red}}>{lastCounting?lastCountedQty:"—"}</div>
+                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:diff===null?T.textSub:lastCountedQty<totalAcquired?T.red:lastCountedQty===totalAcquired?T.green:T.purple}}>{lastCounting?lastCountedQty:"—"}</div>
                 <div style={{fontSize:T.fs10,color:T.textMuted}}>{lastCounting?fmtDate(lastCounting.date):"Sem contagem"}</div>
               </div>
               <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
                 <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Diferença</div>
-                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:diff===null?T.textSub:diff>=0?T.green:T.red}}>
+                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:diff===null?T.textSub:diff===0?T.green:diff>0?T.purple:T.red}}>
                   {diff===null?"—":diff>0?`+${diff}`:String(diff)}
                 </div>
-                <div style={{fontSize:T.fs10,color:diff===null?T.textMuted:diff===0?T.green:T.red}}>{diff===null?"":diff===0?"Sem perdas":diff>0?"Abaixo do adquirido":"Acima do adquirido"}</div>
+                <div style={{fontSize:T.fs10,color:diff===null?T.textMuted:diff===0?T.green:diff>0?T.purple:T.red}}>{diff===null?"":diff===0?"Igual ao adquirido":diff>0?"Acima do adquirido":"Abaixo do adquirido"}</div>
               </div>
             </div>
             {si.value>0&&(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                 <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
                   <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>Valor Adquirido</div>
-                  <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:T.warm}}>{fmtCur(Number(si.value)*totalAcquired)}</div>
+                  <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:T.accent}}>{fmtCur(Number(si.value)*totalAcquired)}</div>
                 </div>
                 <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
                   <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>Valor Contado</div>
-                  <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:diff===null?T.textSub:diff>=0?T.green:T.red}}>{lastCounting?fmtCur(Number(si.value)*lastCountedQty):"—"}</div>
+                  <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:diff===null?T.textSub:lastCountedQty<totalAcquired?T.red:lastCountedQty===totalAcquired?T.green:T.purple}}>{lastCounting?fmtCur(Number(si.value)*lastCountedQty):"—"}</div>
                 </div>
                 <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
                   <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>Diferença em Valor</div>
-                  <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:diff===null?T.textSub:diff>=0?T.green:T.red}}>{diff===null?"—":fmtCur(Number(si.value)*diff)}</div>
+                  <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:diff===null?T.textSub:diff===0?T.green:diff>0?T.purple:T.red}}>{diff===null?"—":fmtCur(Number(si.value)*diff)}</div>
                 </div>
               </div>
             )}
@@ -1408,13 +1410,13 @@ function EvoTab({items,countings,purchases}) {
             <div style={S.card({marginBottom:14,padding:"16px 14px"})}>
               <div style={{fontWeight:700,marginBottom:4,color:T.accent,fontSize:T.fs13}}>📊 Evolução em Quantidade e Valor</div>
               <div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:14}}>
-                🟦 Compras (acumulado) · 🟩/🟥 Contagens (vs adquirido)
+                🟦 Compras (acumulado) · 🟩 Igual · 🟪 Acima · 🟥 Abaixo do adquirido
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
                 {series.map((d,i)=>{
                   const pct=maxQ>0?(d.qty/maxQ)*100:0;
                   const isPurch=d.type==="purchase";
-                  const bc=isPurch?T.accent:(d.qty>=totalAcquired?T.green:T.red);
+                  const bc=isPurch?T.accent:(d.qty===totalAcquired?T.green:d.qty>totalAcquired?T.purple:T.red);
                   return (
                     <div key={i}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
@@ -1426,8 +1428,7 @@ function EvoTab({items,countings,purchases}) {
                         <span style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:bc,flexShrink:0}}>{d.qty} <span style={{fontSize:9,color:T.textMuted}}>{si.unit}</span></span>
                       </div>
                       <div style={{position:"relative",height:14,background:T.surface,borderRadius:4,overflow:"hidden"}}>
-                        {minR&&maxQ>0&&<div style={{position:"absolute",left:`${(minR/maxQ)*100}%`,top:0,bottom:0,width:1,background:T.red+"66",zIndex:2}}/>}
-                        {maxR&&maxQ>0&&<div style={{position:"absolute",left:`${(maxR/maxQ)*100}%`,top:0,bottom:0,width:1,background:T.purple+"66",zIndex:2}}/>}
+
                         <div style={{height:"100%",width:`${pct}%`,background:bc,borderRadius:4,transition:"width .5s",opacity:.85}}/>
                       </div>
                     </div>
@@ -1447,28 +1448,35 @@ function EvoTab({items,countings,purchases}) {
                 <table style={{width:"100%",borderCollapse:"collapse",minWidth:320}}>
                   <thead>
                     <tr style={{background:T.surface}}>
-                      {["Tipo","Data","Quantidade","Diferença"].map((h,i)=>(
+                      {["Tipo","Data","Qtd / Valor","Diferença (vs Adquirido)"].map((h,i)=>(
                         <th key={i} style={{padding:"7px 8px",textAlign:"left",color:T.textMuted,fontWeight:600,fontSize:T.fs11,whiteSpace:"nowrap"}}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {series.map((d,i)=>{
-                      const prev=i>0?series[i-1]:null;
-                      const diff=prev?d.qty-prev.qty:null;
+                      // diff column: for countings = counted - totalAcquired; for purchases = show accumulative qty
                       const isPurch=d.type==="purchase";
+                      const rowDiff=isPurch?null:(d.qty-totalAcquired);
+                      const diffColor=rowDiff===null?T.textMuted:rowDiff===0?T.green:rowDiff>0?T.purple:T.red;
+                      const valQty=isPurch?null:Number(si.value||0)*d.qty;
+                      const valAcq=Number(si.value||0)*totalAcquired;
                       return(
                         <tr key={i} style={{borderBottom:`1px solid ${T.border}`}}>
                           <td style={{padding:"7px 8px",fontSize:T.fs12,whiteSpace:"nowrap"}}>
-                            <span style={{color:isPurch?T.warm:T.accent,fontWeight:600}}>{isPurch?"💰 Compra":"📋 Contagem"}</span>
+                            <span style={{color:isPurch?T.accent:T.accent,fontWeight:600}}>{isPurch?"💰 Compra":"📋 Contagem"}</span>
                             <div style={{fontSize:T.fs10,color:T.textMuted,marginTop:1}}>{d.label}</div>
                           </td>
                           <td style={{padding:"7px 8px",color:T.textMuted,fontSize:T.fs12,whiteSpace:"nowrap"}}>{d.date?fmtDate(d.date):"—"}</td>
-                          <td style={{padding:"7px 8px",fontFamily:T.fontMono,color:isPurch?T.warm:T.accent,fontSize:T.fs12,fontWeight:600}}>{d.qty} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></td>
+                          <td style={{padding:"7px 8px",fontSize:T.fs12}}>
+                            <div style={{fontFamily:T.fontMono,color:isPurch?T.accent:diffColor,fontWeight:600}}>{d.qty} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></div>
+                            {si.value>0&&<div style={{fontSize:T.fs10,color:T.textMuted,marginTop:1}}>{fmtCur(isPurch?Number(si.value)*d.qty:valQty)}</div>}
+                          </td>
                           <td style={{padding:"7px 8px"}}>
-                            {diff!==null
-                              ?<span style={{color:diff>0?T.green:diff<0?T.red:T.textMuted,fontWeight:700,fontFamily:T.fontMono,fontSize:T.fs12}}>{diff>0?"+":""}{diff}</span>
-                              :<span style={{color:T.textMuted,fontSize:T.fs12}}>—</span>}
+                            {isPurch
+                              ?<span style={{color:T.textMuted,fontSize:T.fs12}}>—</span>
+                              :<span style={{color:diffColor,fontWeight:700,fontFamily:T.fontMono,fontSize:T.fs12}}>{rowDiff>0?"+":""}{rowDiff}</span>}
+                            {si.value>0&&!isPurch&&rowDiff!==null&&<div style={{fontSize:T.fs10,color:diffColor,marginTop:1}}>{fmtCur(Number(si.value)*rowDiff)}</div>}
                           </td>
                         </tr>
                       );
