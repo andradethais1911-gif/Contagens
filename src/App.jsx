@@ -44,7 +44,7 @@ const T = {
 
 const daysUntil = s => { const n=new Date();n.setHours(0,0,0,0);const d=new Date(s+"T00:00:00");d.setHours(0,0,0,0);return Math.round((d-n)/86400000); };
 const fmtDate = s => { if(!s)return"—";const[y,m,d]=s.split("-");return`${d}/${m}/${y}`; };
-const todayStr = () => new Date().toISOString().slice(0,10);
+const todayStr = () => { const d=new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
 const normPhone = v => v.replace(/\D/g,"");
 const fmtCur = v => Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const upper = s => s.toUpperCase();
@@ -341,6 +341,7 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
   const [counts,setCounts]=useState({});
   const [confirmed,setConfirmed]=useState({});
   const [inputVal,setInputVal]=useState("");
+  const [savedCounting,setSavedCounting]=useState(null);
 
   const active = getActiveScheduled(scheduledDates);
   const nextSched = active ? active.sd : null;
@@ -348,7 +349,7 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
   const futureScheduled = (scheduledDates||[]).filter(sd=>!sd.done&&sd.date>todayStr()).sort((a,b)=>a.date.localeCompare(b.date));
   const nextFuture = futureScheduled[0]||null;
   const hasScheduled = (scheduledDates||[]).filter(sd=>!sd.done).length>0;
-  const isBlocked = hasScheduled && !active;
+  const isBlocked = !active; // ALWAYS blocked unless there is an active scheduled date today or overdue
   const label = nextSched?.label||`CONTAGEM ${countings.length+1}`;
   const countDate = nextSched?.date||todayStr();
 
@@ -367,8 +368,8 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
     const result=items.map(i=>({...i,counted:counts[i.id]??0,validated:false}));
     const counting={id:Date.now(),label,date:countDate,items:result,validated:false};
     onSubmit(counting,nextSched);
+    setSavedCounting(counting);
     setPhase("done");
-    if(whatsapp) openWA(`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(buildWAMsg(counting,items))}`);
   };
 
   if(!items.length) return (
@@ -511,13 +512,18 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
       <div style={{fontFamily:T.fontMono,fontSize:T.fs20,color:T.green,textAlign:"center",marginBottom:6}}>CONTAGEM ENVIADA!</div>
       <div style={{fontSize:T.fs13,color:T.textMuted,textAlign:"center",marginBottom:8}}>Dados salvos com sucesso</div>
       <div style={{fontSize:T.fs12,color:T.yellow,textAlign:"center",marginBottom:24}}>⏳ Aguardando validação do gerente</div>
-      <div style={{...S.card({maxWidth:340,width:"100%",marginBottom:20})}}>
+      <div style={{...S.card({maxWidth:340,width:"100%",marginBottom:16})}}>
         <div style={{fontSize:T.fs13,color:T.text,lineHeight:2.2}}>
           <div>💾 <span style={{color:T.green,fontWeight:600}}>Contagem salva</span> no histórico</div>
-          {whatsapp&&<div>📲 <span style={{color:T.green,fontWeight:600}}>Relatório enviado</span> via WhatsApp</div>}
+          <div>⏳ <span style={{color:T.yellow,fontWeight:600}}>Aguardando validação</span> do gerente</div>
         </div>
       </div>
-      <button onClick={onBack} style={{...S.btn(T.surface,true),border:`1px solid ${T.border}`,color:T.textSub}}>← Início</button>
+      {whatsapp&&savedCounting&&(
+        <button onClick={()=>openWA(`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(buildWAMsg(savedCounting,items))}`)} style={{...S.btn(T.green,true),padding:"13px",fontSize:T.fs14,marginBottom:12,maxWidth:340}}>
+          📲 Enviar relatório ao gerente via WhatsApp
+        </button>
+      )}
+      <button onClick={onBack} style={{...S.btn(T.surface,true),border:`1px solid ${T.border}`,color:T.textSub,maxWidth:340}}>← Início</button>
     </div>
   );
 }
@@ -626,9 +632,9 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
         <div style={{marginBottom:8}}>
           <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>STATUS DAS QUANTIDADES</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-            <Card icon="⬇️" label="ITENS ABAIXO DO MÍNIMO" value={abMin}   color={abMin>0?T.red:T.green}    onClick={()=>onNavigate(1)}/>
-            <Card icon="✅" label="ITENS DENTRO DA MARGEM"  value={inRange} color={inRange===items.length?T.green:inRange>0?T.green:T.red} onClick={()=>onNavigate(1)}/>
-            <Card icon="⬆️" label="ITENS ACIMA DO MÁXIMO"   value={acMax}   color={acMax===0?T.green:T.purple} onClick={()=>onNavigate(1)}/>
+            <Card icon="⬇️" label="ITENS ABAIXO DO MÍNIMO" value={abMin}   sub={lastC?lastC.label:null} color={abMin>0?T.red:T.green}    onClick={()=>onNavigate(1)}/>
+            <Card icon="✅" label="ITENS DENTRO DA MARGEM"  value={inRange} sub={lastC?lastC.label:null} color={inRange===items.length?T.green:inRange>0?T.green:T.red} onClick={()=>onNavigate(1)}/>
+            <Card icon="⬆️" label="ITENS ACIMA DO MÁXIMO"   value={acMax}   sub={lastC?lastC.label:null} color={acMax===0?T.green:T.purple} onClick={()=>onNavigate(1)}/>
           </div>
         </div>
       )}
@@ -907,8 +913,11 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:10,flexShrink:0}}>
                     <span style={{fontSize:T.fs11,color:T.accent}}>{isExp?"▲":"▼"}</span>
-                    {!c.validated&&<button onClick={e=>{e.stopPropagation();validateCounting(c);}} style={S.btn(T.green,false,true)} title="Validar">✅</button>}
-                    <button onClick={e=>{e.stopPropagation();setConfirm({message:`Excluir "${c.label}"?\n\nIsso também desfará o vínculo com o agendamento correspondente.`,onConfirm:()=>{setCountings(prev=>prev.filter(x=>x.id!==c.id));setScheduledDates(prev=>prev.map(s=>s.linkedCountingId===c.id?{...s,done:false,linkedCountingId:null}:s));setConfirm(null);}});}} style={S.btn(T.red,false,true)}>🗑</button>
+                    {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();validateCounting(c);}} style={S.btn(T.green,false,true)} title="Validar">✅</button>}
+                    {!c.validated&&!c.rejected&&<button onClick={e=>{e.stopPropagation();rejectCounting(c);}} style={S.btn(T.red,false,true)} title="Reprovar">❌</button>}
+                    {c.validated
+  ?<button disabled style={{...S.btn(T.textMuted,false,true),opacity:.35,cursor:"not-allowed"}} title="Contagem validada não pode ser excluída">🗑</button>
+  :<button onClick={e=>{e.stopPropagation();setConfirm({message:`Excluir "${c.label}"?\nIsso também desfará o vínculo com o agendamento correspondente.`,onConfirm:()=>{setCountings(prev=>prev.filter(x=>x.id!==c.id));setScheduledDates(prev=>prev.map(s=>s.linkedCountingId===c.id?{...s,done:false,linkedCountingId:null}:s));setConfirm(null);}});}} style={S.btn(T.red,false,true)}>🗑</button>}
                   </div>
                 </div>
                 {/* Expandable items */}
@@ -973,12 +982,12 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
                       {fmtDate(sd.date)}{" "}
                       {sd.done?"· ✅ Concluído (pelo contador)":ov?"· ⚠️ ATRASADA — aguardando realização":days===0?"· 📋 HOJE":`· em ${days} dia${days!==1?"s":""}`}
                     </div>
-                    {isLocked&&<div style={{fontSize:T.fs10,color:T.yellow,marginTop:4}}>🔒 Vinculada à contagem "{linkedCounting.label}" — exclua a contagem para liberar</div>}
+                    {isLocked&&<div style={{fontSize:T.fs10,color:linkedCounting?.validated?T.red:T.yellow,marginTop:4}}>🔒 {linkedCounting?.validated?"Contagem validada — agendamento permanente":"Vinculada à contagem \""+linkedCounting.label+"\" — exclua a contagem para liberar"}</div>}
                   </div>
                   <div style={{display:"flex",gap:6,marginLeft:8}}>
                     {!sd.done&&!isLocked&&<button onClick={()=>startEditSch(sd)} style={S.btn(T.accent,false,true)}>✏️</button>}
                     {isLocked
-                      ? <button disabled style={{...S.btn(T.textMuted,false,true),opacity:.4,cursor:"not-allowed"}}>🗑</button>
+                      ? <button disabled style={{...S.btn(T.textMuted,false,true),opacity:.4,cursor:"not-allowed"}} title={linkedCounting?.validated?"Contagem validada: não pode excluir":"Exclua a contagem vinculada primeiro"}>🗑</button>
                       : <button onClick={()=>setConfirm({message:`Excluir agendamento "${sd.label}"?`,onConfirm:()=>{setScheduledDates(prev=>prev.filter(s=>s.id!==sd.id));setConfirm(null);}})} style={S.btn(T.red,false,true)}>🗑</button>
                     }
                   </div>
@@ -1310,8 +1319,8 @@ function EvoTab({items,countings,purchases}) {
       return {qty:accQty, label:`Compra (+${p.qty})`, date:p.date, type:"purchase"};
     });
 
-    // Counting rows
-    const sortedCountings=[...countings].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    // Counting rows - ONLY validated
+    const sortedCountings=[...countings].filter(c=>c.validated).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
     const countingRows = sortedCountings.map(c=>{
       const ci=(c.items||[]).find(i=>i.id===si.id);
       return{qty:ci?.counted??0, label:c.label, date:c.date, type:"counting"};
@@ -1328,10 +1337,10 @@ function EvoTab({items,countings,purchases}) {
 
   const series = getSeries();
   const totalAcquired = getTotalAcquired(si||{acquiredQty:0,purchases:[]});
-  // Last counting qty for this item
-  const lastCounting = [...countings].sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0];
+  // Last VALIDATED counting for this item
+  const lastCounting = [...countings].filter(c=>c.validated).sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0];
   const lastCountedQty = lastCounting ? (lastCounting.items||[]).find(i=>i.id===si?.id)?.counted??0 : 0;
-  const diff = lastCounting && si ? lastCountedQty - totalAcquired : null;
+  const diff = lastCounting && si ? totalAcquired - lastCountedQty : null; // compra - contagem
 
   const maxQ = Math.max(...series.map(d=>d.qty), totalAcquired, lastCountedQty, 1);
   const minR = si?.min||null;
@@ -1373,7 +1382,7 @@ function EvoTab({items,countings,purchases}) {
                 <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:diff===null?T.textSub:diff>=0?T.green:T.red}}>
                   {diff===null?"—":diff>0?`+${diff}`:String(diff)}
                 </div>
-                <div style={{fontSize:T.fs10,color:diff===null?T.textMuted:diff>=0?T.green:T.red}}>{diff===null?"":diff>=0?"Em dia":"Abaixo do adquirido"}</div>
+                <div style={{fontSize:T.fs10,color:diff===null?T.textMuted:diff===0?T.green:T.red}}>{diff===null?"":diff===0?"Sem perdas":diff>0?"Abaixo do adquirido":"Acima do adquirido"}</div>
               </div>
             </div>
             {si.value>0&&(
@@ -1399,15 +1408,13 @@ function EvoTab({items,countings,purchases}) {
             <div style={S.card({marginBottom:14,padding:"16px 14px"})}>
               <div style={{fontWeight:700,marginBottom:4,color:T.accent,fontSize:T.fs13}}>📊 Evolução em Quantidade e Valor</div>
               <div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:14}}>
-                🟧 Compras (acumulado) · 🟦 Contagens
-                {minR&&<span> · <span style={{color:T.red}}>│ mín ({minR})</span></span>}
-                {maxR&&<span> · <span style={{color:T.purple}}>│ máx ({maxR})</span></span>}
+                🟦 Compras (acumulado) · 🟩/🟥 Contagens (vs adquirido)
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
                 {series.map((d,i)=>{
                   const pct=maxQ>0?(d.qty/maxQ)*100:0;
                   const isPurch=d.type==="purchase";
-                  const bc=isPurch?T.warm:T.accent;
+                  const bc=isPurch?T.accent:(d.qty>=totalAcquired?T.green:T.red);
                   return (
                     <div key={i}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
@@ -1416,7 +1423,7 @@ function EvoTab({items,countings,purchases}) {
                           <span style={{fontSize:T.fs11,color:T.text,fontWeight:isPurch?600:400,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.label}</span>
                           {d.date&&<span style={{color:T.textMuted,fontSize:9,flexShrink:0}}>· {fmtDate(d.date)}</span>}
                         </div>
-                        <span style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:bc,flexShrink:0}}>{d.qty}</span>
+                        <span style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:bc,flexShrink:0}}>{d.qty} <span style={{fontSize:9,color:T.textMuted}}>{si.unit}</span></span>
                       </div>
                       <div style={{position:"relative",height:14,background:T.surface,borderRadius:4,overflow:"hidden"}}>
                         {minR&&maxQ>0&&<div style={{position:"absolute",left:`${(minR/maxQ)*100}%`,top:0,bottom:0,width:1,background:T.red+"66",zIndex:2}}/>}
