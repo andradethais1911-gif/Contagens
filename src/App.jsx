@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import React from "react";
 
 function injectFonts() {
   if (document.getElementById("app-fonts")) return;
