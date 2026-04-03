@@ -1044,20 +1044,22 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
   const lastC=countings.filter(c=>c.validated).length?[...countings].filter(c=>c.validated).sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0]:null;
   const lc={};if(lastC)(lastC.items||[]).forEach(ci=>{lc[ci.id]=ci.counted;});
 
-  // Recalculate suggestion considering already purchased quantities
+  // Purchase suggestion: based on counted qty from last validated counting
+  // Purchases already made are shown as info but don't hide the need
+  // Need = max - (counted + already_purchased), minimum 0
   const getPurchasedQty = (itemId) => (purchases||[]).filter(p=>p.itemId===itemId).reduce((s,p)=>s+Number(p.qty||0),0);
 
   const allSug=items.filter(i=>{
-    const cur=(lc[i.id]??0) + getPurchasedQty(i.id);
-    if(i.max&&cur<i.max) return true;
-    if(!i.max&&i.min&&cur<i.min) return true;
+    if(!lastC) return false; // need a validated counting
+    const counted=lc[i.id]??0;
+    if(i.max&&counted<i.max) return true;   // counted below max → suggest
+    if(!i.max&&i.min&&counted<i.min) return true;
     return false;
   }).map(i=>{
     const curBase=lc[i.id]??0;
     const alreadyBought=getPurchasedQty(i.id);
-    const cur=curBase+alreadyBought;
-    const need=i.max?Math.max(i.max-cur,0):Math.max(i.min-cur+i.min,0);
-    return{...i,curBase,alreadyBought,cur,need,est:Number(i.value||0)*need};
+    const need=i.max?Math.max(i.max-curBase-alreadyBought,0):Math.max(i.min-curBase-alreadyBought+i.min,0);
+    return{...i,curBase,alreadyBought,cur:curBase+alreadyBought,need,est:Number(i.value||0)*need};
   }).filter(i=>i.need>0);
 
   const [sel,setSel]=useState(()=>Object.fromEntries(allSug.map(i=>[i.id,true])));
@@ -1615,6 +1617,14 @@ function InstructionsTab() {
 
       {sub==="gerente"&&(
         <div>
+          <Acc id="dashboard" title="📊 Aba Dashboard" color={T.accent}>
+            <P>Visão geral do estoque em tempo real. Todos os cards são clicáveis e levam diretamente à tela correspondente.</P>
+            <Li>Os cards de quantidade mostram insumos cadastrados, contabilizados e a diferença — com referência à última contagem.</Li>
+            <Li>Os cards de valor comparam o total adquirido com o valor contabilizado na última contagem.</Li>
+            <Li><HL color={T.red}>Vermelho</HL> indica falta ou problema. <HL color={T.green}>Verde</HL> indica normalidade. <HL color={T.purple}>Roxo</HL> indica excesso acima do máximo.</Li>
+            <Li>Status das Quantidades e Status das Contagens resumem o cenário do estoque em 6 cards objetivos, sempre baseados na última contagem registrada.</Li>
+          </Acc>
+
           <Acc id="insumos" title="📦 Aba Insumos" color={T.green}>
             <P>Ponto de partida de tudo. Aqui você registra cada item que compõe o estoque — toalhas, roupões etc.</P>
             <Li>Informe o <HL>nome</HL> (em maiúsculas), a <HL>unidade</HL> de medida, o <HL>valor unitário</HL>, a quantidade <HL color={T.warm}>mínima</HL> e a <HL color={T.purple}>máxima</HL>.</Li>
