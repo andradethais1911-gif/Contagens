@@ -13,11 +13,14 @@ function injectFonts() {
 const DB = {
   async get(k) {
     try {
-      const r = await fetch(`/api/storage?key=${encodeURIComponent(k)}`);
+      const r = await fetch(`/api/storage?key=${encodeURIComponent(k)}`, {cache:"no-store"});
       if (!r.ok) return null;
-      const j = await r.json();
+      const text = await r.text();
+      if (!text || text.trim()==="") return null;
+      const j = JSON.parse(text);
       if (j.value === null || j.value === undefined) return null;
-      return typeof j.value === "string" ? JSON.parse(j.value) : j.value;
+      if (typeof j.value !== "string") return j.value;
+      try { return JSON.parse(j.value); } catch { return j.value; }
     } catch { return null; }
   },
   async set(k, v) {
@@ -25,6 +28,7 @@ const DB = {
       await fetch("/api/storage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify({ key: k, value: JSON.stringify(v) })
       });
     } catch {}
@@ -48,7 +52,7 @@ const T = {
 const daysUntil = s => { const n=new Date();n.setHours(0,0,0,0);const d=new Date(s+"T00:00:00");d.setHours(0,0,0,0);return Math.round((d-n)/86400000); };
 const fmtDate = s => { if(!s)return"—";const[y,m,d]=s.split("-");return`${d}/${m}/${y}`; };
 const todayStr = () => { const d=new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
-const normPhone = v => v.replace(/\D/g,"");
+const normPhone = v => String(v||"").replace(/\D/g,"");
 const fmtCur = v => Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const upper = s => s.toUpperCase();
 
@@ -703,7 +707,7 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
       return(
         <g key={i}>
           <path d={pct>=1?`M${cx},${cy-R} A${R},${R} 0 1,1 ${cx-0.001},${cy-R} L${cx},${cy-r} A${r},${r} 0 1,0 ${cx+0.001},${cy-r} Z`:d} fill={sl.color}/>
-          {pctLabel&&<text x={lx} y={ly+5.5} textAnchor="middle" fontSize={T.fs16} fontWeight="700" fill="#fff" fontFamily={T.fontMono}>{pctLabel}</text>}
+          {pctLabel&&<text x={lx} y={ly+6} textAnchor="middle" dominantBaseline="middle" fontSize={T.fs16} fontWeight="700" fill="#fff" fontFamily={T.fontMono}>{pctLabel}</text>}
         </g>
       );
     });
@@ -888,9 +892,19 @@ function ItemsTab({items,setItems,countings}) {
   const empty={name:"",unit:"Unidade(s)",value:"",min:"",max:"",attachment:null,attachmentName:""};
   const [form,setForm]=useState(empty); const [edit,setEdit]=useState(null); const [err,setErr]=useState("");
   const [showForm,setShowForm]=useState(false); const [confirm,setConfirm]=useState(null);
+  const [search,setSearch]=useState("");
+  const [selIds,setSelIds]=useState(()=>new Set());
+  const [allSel,setAllSel]=useState(true);
   const fileRef=useRef();
   const lastC=countings.length?[...countings].sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0]:null;
   const lc={};if(lastC)(lastC.items||[]).forEach(ci=>{lc[ci.id]=ci.counted;});
+  const filtered=items.filter(it=>!search||it.name.toLowerCase().includes(search.toLowerCase()));
+  const effectiveSel=allSel?new Set(filtered.map(i=>i.id)):selIds;
+  const selItems=filtered.filter(i=>effectiveSel.has(i.id));
+  const totalAcqSel=selItems.reduce((s,i)=>s+Number(i.value||0)*getTotalAcquired(i),0);
+  const totalContSel=selItems.reduce((s,i)=>s+Number(i.value||0)*(lc[i.id]??0),0);
+  const toggleSel=(id)=>{if(allSel){const s=new Set(filtered.map(i=>i.id));s.delete(id);setSelIds(s);setAllSel(false);}else{const s=new Set(selIds);s.has(id)?s.delete(id):s.add(id);setSelIds(s);}};
+  const toggleAll=()=>{if(allSel){setSelIds(new Set());setAllSel(false);}else{setAllSel(true);setSelIds(new Set());}};
 
   const handleFile=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>setForm(p=>({...p,attachment:ev.target.result,attachmentName:f.name}));r.readAsDataURL(f);};
   const save=()=>{
@@ -905,15 +919,32 @@ function ItemsTab({items,setItems,countings}) {
   return (
     <div>
       {confirm&&<ConfirmModal message={`Deseja excluir "${confirm.name}"?`} onConfirm={()=>{setItems(prev=>prev.filter(i=>i.id!==confirm.id));setConfirm(null);}} onCancel={()=>setConfirm(null)}/>}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,marginTop:2}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,marginTop:2}}>
         <div style={{...S.sec,marginBottom:0}}>Insumos <span style={{color:T.textMuted,fontWeight:400}}>({items.length})</span></div>
         <button onClick={()=>{setEdit(null);setForm(empty);setShowForm(p=>!p);}} style={S.btn(showForm?T.textMuted:T.green,false,true)}>{showForm?"✕ Fechar":"+ Novo"}</button>
       </div>
+      {/* Search bar */}
+      <input placeholder="🔍 Pesquisar insumo..." value={search} onChange={e=>setSearch(e.target.value)} style={{...S.input({marginBottom:10})}}/>
+      {/* Selection summary */}
+      {items.length>0&&(
+        <div style={{...S.card({marginBottom:12,padding:"10px 14px",background:T.surface}),display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div onClick={toggleAll} style={{width:18,height:18,borderRadius:4,border:`2px solid ${allSel?T.green:T.textMuted}`,background:allSel?T.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+              {allSel&&<span style={{color:"#fff",fontSize:10,fontWeight:900}}>✓</span>}
+            </div>
+            <span style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600}}>{allSel?filtered.length:selItems.length} selecionado{(allSel?filtered.length:selItems.length)!==1?"s":""}</span>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:600}}>Adquirido: <span style={{color:T.accent,fontFamily:T.fontMono}}>{fmtCur(totalAcqSel)}</span></div>
+            {lastC&&<div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:600}}>Contabilizado: <span style={{fontFamily:T.fontMono,color:totalContSel<totalAcqSel?T.red:totalContSel===totalAcqSel?T.green:T.purple}}>{fmtCur(totalContSel)}</span></div>}
+          </div>
+        </div>
+      )}
       {showForm&&(
         <div style={{...S.card({marginBottom:16,border:`1px solid ${T.border}`,padding:"18px"})}}>
           <div style={{fontWeight:700,marginBottom:14,color:T.green,fontSize:T.fs14}}>{edit!==null?"Editar insumo":"Novo insumo"}</div>
           <div style={S.label}>Nome *</div>
-          <input placeholder="Ex: TOALHA DE BANHO" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value.toUpperCase()}))} style={{...S.input({marginBottom:12,textTransform:"uppercase"})}}/>
+          <input placeholder="Ex: TOALHA DE BANHO" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value.toUpperCase()}))} style={{...S.input({marginBottom:12,textTransform:"uppercase",fontSize:T.fs13})}}/>
           <div style={S.label}>Unidade</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>{UNITS.map(u=><button key={u} onClick={()=>setForm(p=>({...p,unit:u}))} style={{background:form.unit===u?T.accent:T.surface,border:`1px solid ${form.unit===u?T.accent:T.border}`,borderRadius:8,padding:"6px 12px",color:form.unit===u?"#fff":T.textSub,fontWeight:600,fontSize:T.fs12,cursor:"pointer",fontFamily:T.fontBase}}>{u}</button>)}</div>
           <div style={{marginBottom:12}}>
@@ -936,7 +967,8 @@ function ItemsTab({items,setItems,countings}) {
         </div>
       )}
       {items.length===0&&<div style={{textAlign:"center",color:T.textMuted,padding:"40px 0",fontSize:T.fs13}}>Nenhum insumo cadastrado ainda.</div>}
-      {items.map(it=>{
+      {filtered.length===0&&items.length>0&&<div style={{textAlign:"center",color:T.textMuted,padding:"30px 0",fontSize:T.fs13}}>Nenhum resultado para "{search}".</div>}
+      {filtered.map(it=>{
         const counted=lc[it.id];
         const st=counted!==undefined?getStatus(it,counted):null;
         return (
@@ -976,6 +1008,9 @@ function ItemsTab({items,setItems,countings}) {
                 {it.attachmentName&&!it.attachment?.startsWith("data:image")&&<div style={{fontSize:T.fs11,color:T.purple,marginTop:4}}>📎 {it.attachmentName}</div>}
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0,alignSelf:"flex-start"}}>
+                <div onClick={()=>toggleSel(it.id)} style={{width:18,height:18,borderRadius:4,border:`2px solid ${effectiveSel.has(it.id)?T.green:T.textMuted}`,background:effectiveSel.has(it.id)?T.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",marginBottom:2}}>
+                  {effectiveSel.has(it.id)&&<span style={{color:"#fff",fontSize:10,fontWeight:900}}>✓</span>}
+                </div>
                 <button onClick={()=>startEdit(it)} style={{...S.btn(T.accent,false,true)}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                 <button onClick={()=>setConfirm({id:it.id,name:it.name})} style={{...S.btn(T.red,false,true)}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
               </div>
@@ -1193,7 +1228,7 @@ function CountTab({items,countings,setCountings,setItems,scheduledDates,setSched
           <div style={{...S.card({marginBottom:14,border:`1px solid ${T.border}`,padding:"18px"})}}>
             <div style={{fontWeight:700,color:T.yellow,marginBottom:12,fontSize:T.fs14}}>{schEditId!==null?"Editar agendamento":"Agendar contagem"}</div>
             <div style={S.label}>Nome</div>
-            <input placeholder="Ex: CONTAGEM MENSAL" value={schForm.label} onChange={e=>setSchForm(p=>({...p,label:e.target.value.toUpperCase()}))} style={{...S.input({marginBottom:10,textTransform:"uppercase"})}}/>
+            <input placeholder="Ex: CONTAGEM MENSAL" value={schForm.label} onChange={e=>setSchForm(p=>({...p,label:e.target.value.toUpperCase()}))} style={{...S.input({marginBottom:10,textTransform:"uppercase",fontSize:T.fs13})}}/>
             <div style={S.label}>Data</div>
             <input type="date" value={schForm.date} onChange={e=>setSchForm(p=>({...p,date:e.target.value}))} style={{...S.input({marginBottom:10})}}/>
             {schErr&&<div style={{color:T.red,fontSize:T.fs12,marginBottom:8}}>{schErr}</div>}
@@ -1287,6 +1322,8 @@ function BuyPurchaseGroup({label,color,items,it,openEditPurchase,setConfirmDel})
 // ─── BUY TAB ─────────────────────────────────────────────────────────────────
 function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="program"}) {
   const [subTab,setSubTab]=useState(initialSubTab);
+  const [progSearch,setProgSearch]=useState("");
+  const [histSearch,setHistSearch]=useState("");
   const lastC=countings.filter(c=>c.validated).length?[...countings].filter(c=>c.validated).sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0]:null;
   const lc={};if(lastC)(lastC.items||[]).forEach(ci=>{lc[ci.id]=ci.counted;});
 
@@ -1391,18 +1428,18 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
   });
   const [selHistory,setSelHistory]=useState(null); // null = all selected by default
   const isHistSel = (id) => selHistory===null || !!selHistory[id];
+  const filteredHist=itemsWithPurchases.filter(g=>!histSearch||g.it.name.toLowerCase().includes(histSearch.toLowerCase()));
   const toggleHistSel=(id)=>{
-    // If null (all selected), convert to explicit map first
     const base = selHistory===null ? Object.fromEntries(itemsWithPurchases.map(g=>[g.it.id,true])) : {...selHistory};
     base[id]=!base[id];
     setSelHistory(base);
   };
   const toggleAllHist=()=>{
-    const allSel = itemsWithPurchases.every(g=>isHistSel(g.it.id));
-    if(allSel) setSelHistory(Object.fromEntries(itemsWithPurchases.map(g=>[g.it.id,false])));
+    const allSel = filteredHist.every(g=>isHistSel(g.it.id));
+    if(allSel) setSelHistory(Object.fromEntries(filteredHist.map(g=>[g.it.id,false])));
     else setSelHistory(null);
   };
-  const selHistItems=itemsWithPurchases.filter(g=>isHistSel(g.it.id));
+  const selHistItems=filteredHist.filter(g=>isHistSel(g.it.id));
   const totalHistVal=selHistItems.reduce((s,g)=>s+g.totalVal,0);
   const totalHistQty=selHistItems.reduce((s,g)=>s+g.totalQty,0);
 
@@ -1451,13 +1488,16 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
             </div>
           </div>
           {lastC&&allSug.length===0&&<div style={{textAlign:"center",color:T.green,padding:"40px 0",fontWeight:600,fontSize:T.fs14}}>✅ Todos os insumos já atingiram o máximo!</div>}
-          {allSug.length>0&&(
+          {allSug.length>0&&(()=>{
+            const filteredSug=allSug.filter(it=>!progSearch||it.name.toLowerCase().includes(progSearch.toLowerCase()));
+            return(
             <>
+              <input placeholder="🔍 Pesquisar..." value={progSearch} onChange={e=>setProgSearch(e.target.value)} style={{...S.input({marginBottom:10})}}/>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                 <div style={{fontSize:T.fs12,color:T.textMuted}}>{selItems.length} de {allSug.length} itens</div>
                 <button onClick={toggleAll} style={{...S.btn(T.surface,false,true),border:`1px solid ${T.border}`,color:T.textSub,fontSize:T.fs11}}>{allSug.every(i=>sel[i.id])?"Desmarcar todos":"Selecionar todos"}</button>
               </div>
-              {allSug.map(it=>{
+              {filteredSug.map(it=>{
                 const typeColor=it.isInitial?T.warm:T.purple;
                 const typeLabel=it.isInitial?"Entrada inicial":"Reposição";
                 return(
@@ -1504,7 +1544,8 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
                 <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.yellow}}>{fmtCur(totalEst)}</div>
               </div>
             </>
-          )}
+            );
+          })()}
         </div>
       )}
 
@@ -1515,17 +1556,19 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
             <div style={{fontSize:T.fs11,color:T.textMuted}}>Agrupado por insumo. Selecione para calcular o total de compras.</div>
           </div>
 
+          <input placeholder="🔍 Pesquisar..." value={histSearch} onChange={e=>setHistSearch(e.target.value)} style={{...S.input({marginBottom:10})}}/>
           {itemsWithPurchases.length===0&&<div style={{textAlign:"center",color:T.textMuted,padding:"40px 0",fontSize:T.fs13}}>Nenhuma compra registrada ainda.</div>}
 
-          {itemsWithPurchases.length>0&&(
+          {itemsWithPurchases.length>0&&(()=>{
+            return(
             <>
               {/* Select all + grand total */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <button onClick={toggleAllHist} style={{...S.btn(T.surface,false,true),border:`1px solid ${T.border}`,color:T.textSub,fontSize:T.fs11}}>{itemsWithPurchases.every(g=>isHistSel(g.it.id))?"Desmarcar todos":"Selecionar todos"}</button>
+                <button onClick={toggleAllHist} style={{...S.btn(T.surface,false,true),border:`1px solid ${T.border}`,color:T.textSub,fontSize:T.fs11}}>{filteredHist.every(g=>isHistSel(g.it.id))?"Desmarcar todos":"Selecionar todos"}</button>
                 <div style={{fontSize:T.fs12,color:T.textMuted}}>{selHistItems.length} de {itemsWithPurchases.length} selecionados</div>
               </div>
 
-              {itemsWithPurchases.map(({it,ps,totalQty,totalVal})=>{
+              {filteredHist.map(({it,ps,totalQty,totalVal})=>{
                 const isSel=isHistSel(it.id);
                 return(
                   <div key={it.id} style={{...S.card({marginBottom:12,border:`1px solid ${T.border}`,background:isSel?T.green+"05":T.card})}}>
@@ -1577,7 +1620,8 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
                 </div>
               )}
             </>
-          )}
+            );
+          })()}
         </div>
       )}
     </div>
@@ -1586,20 +1630,26 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
 
 // ─── EVOLUTION TAB ───────────────────────────────────────────────────────────
 function EvoTab({items,countings,purchases}) {
-  const [selItem,setSelItem]=useState("all");
-  const si = selItem==="all"?null:items.find(i=>i.id===Number(selItem));
+  const firstId = items.length>0?String(items[0].id):"";
+  const [selItem,setSelItem]=useState(firstId);
+  const [expandPurch,setExpandPurch]=useState({});
+  const si = items.find(i=>i.id===Number(selItem))||null;
 
-  // For single item: one purchase row (total) + validated countings
+  // For single item: grouped purchase row + validated countings
   const getSeries = () => {
     if(!si) return [];
     const itemPurchases=[...(purchases||[])].filter(p=>p.itemId===si.id).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
     const totalPurch=itemPurchases.reduce((s,p)=>s+Number(p.qty||0),0);
-    // purchase detail lines for tooltip
-    const purchDates=itemPurchases.map(p=>{
-      const label=p.pType==="initial"?"Entrada inicial":p.pType==="reposition"?"Reposição":"Compra";
-      return {text:`${fmtDate(p.date)} · +${p.qty} · ${label}`, color:p.pType==="initial"?T.warm:p.pType==="reposition"?T.purple:T.green};
-    });
-    const purchRow=totalPurch>0?[{qty:totalPurch,label:"Total adquirido",purchDates,type:"purchase"}]:[];
+    // Group by type for collapse
+    const initials=itemPurchases.filter(p=>p.pType==="initial");
+    const repos=itemPurchases.filter(p=>p.pType==="reposition");
+    const others=itemPurchases.filter(p=>!p.pType||!["initial","reposition"].includes(p.pType));
+    const purchGroups=[
+      ...(initials.length?[{label:"Entrada inicial",color:T.warm,items:initials,totalQty:initials.reduce((s,p)=>s+Number(p.qty||0),0)}]:[]),
+      ...(repos.length?[{label:"Reposição",color:T.purple,items:repos,totalQty:repos.reduce((s,p)=>s+Number(p.qty||0),0)}]:[]),
+      ...(others.length?[{label:"Compras",color:T.green,items:others,totalQty:others.reduce((s,p)=>s+Number(p.qty||0),0)}]:[]),
+    ];
+    const purchRow=totalPurch>0?[{qty:totalPurch,label:"Total adquirido",purchGroups,type:"purchase"}]:[];
     const sortedC=[...countings].filter(c=>c.validated&&!c.rejected).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
     const countRows=sortedC.map(c=>{
       const ci=(c.items||[]).find(i=>i.id===si.id);
@@ -1615,11 +1665,6 @@ function EvoTab({items,countings,purchases}) {
   const diff=lastCounting&&si?lastCountedQty-totalAcquired:null;
   const maxQ=Math.max(...series.map(d=>d.qty),totalAcquired,lastCountedQty,1);
 
-  // "Todos" mode: total value across all items from last validated counting
-  const allTotalVal=items.reduce((s,i)=>s+(Number(i.value||0)*(lastCounting?(lastCounting.items||[]).find(ci=>ci.id===i.id)?.counted??0:0)),0);
-  const allTotalAcq=items.reduce((s,i)=>s+(Number(i.value||0)*getTotalAcquired(i)),0);
-  const allDiffVal=lastCounting?allTotalVal-allTotalAcq:null;
-
   return (
     <div>
       <div style={{marginBottom:14}}>
@@ -1627,54 +1672,12 @@ function EvoTab({items,countings,purchases}) {
         {items.length===0
           ? <div style={{fontSize:T.fs13,color:T.textMuted}}>Nenhum insumo cadastrado.</div>
           : <select value={selItem} onChange={e=>setSelItem(e.target.value)} style={S.input()}>
-              <option value="all">TODOS OS INSUMOS</option>
               {items.map(i=><option key={i.id} value={String(i.id)}>{i.name}</option>)}
             </select>
         }
       </div>
 
-      {selItem==="all"&&(
-        <div>
-          <div style={{...S.card({marginBottom:12,padding:"14px 16px"})}}>
-            <div style={{fontWeight:700,fontSize:T.fs13,color:T.text,marginBottom:10}}>📊 Resumo geral — todos os insumos</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:lastCounting?10:0}}>
-              <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
-                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>Valor total adquirido</div>
-                <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.accent}}>{fmtCur(allTotalAcq)}</div>
-              </div>
-              <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
-                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>Valor total contabilizado</div>
-                <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:lastCounting?allDiffVal<0?T.red:allDiffVal===0?T.green:T.purple:T.textMuted}}>{lastCounting?fmtCur(allTotalVal):"—"}</div>
-                <div style={{fontSize:T.fs10,color:T.textMuted}}>{lastCounting?fmtDate(lastCounting.date):"Sem contagem validada"}</div>
-              </div>
-              <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
-                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>Diferença em valor</div>
-                <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:allDiffVal===null?T.textMuted:allDiffVal===0?T.green:allDiffVal>0?T.purple:T.red}}>{allDiffVal===null?"—":allDiffVal>0?`+${fmtCur(allDiffVal)}`:fmtCur(allDiffVal)}</div>
-              </div>
-            </div>
-            {lastCounting&&(
-              <div style={{marginTop:8}}>
-                {items.map(i=>{
-                  const ci=(lastCounting.items||[]).find(x=>x.id===i.id);
-                  const cnt=ci?.counted??0;
-                  const acq=getTotalAcquired(i);
-                  const d=cnt-acq;
-                  const dc=d===0?T.green:d>0?T.purple:T.red;
-                  return(
-                    <div key={i.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:`1px solid ${T.border}`}}>
-                      <span style={{fontSize:T.fs12,color:T.text}}>{i.name}</span>
-                      <div style={{display:"flex",gap:12,alignItems:"center"}}>
-                        <span style={{fontSize:T.fs11,color:T.textMuted}}>Contabilizado: <b style={{color:T.text,fontFamily:T.fontMono}}>{cnt}</b></span>
-                        {i.value>0&&<span style={{fontSize:T.fs11,color:dc,fontFamily:T.fontMono,fontWeight:700}}>{d>0?"+":""}{fmtCur(d*i.value)}</span>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+
 
       {si&&(
         <>
@@ -1742,15 +1745,24 @@ function EvoTab({items,countings,purchases}) {
                           <span style={{fontSize:T.fs10,color:isPurch?T.warm:T.green,fontWeight:700,flexShrink:0}}>{isPurch?"💰":"📋"}</span>
                           <div style={{overflow:"hidden"}}>
                             <span style={{fontSize:T.fs11,color:T.text,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"block"}}>{d.label}</span>
-                            {d.purchDates&&d.purchDates.map((pd,pi)=>(
-                              <span key={pi} style={{fontSize:T.fs10,color:pd.color,display:"block"}}>{pd.text}</span>
+                            {d.purchGroups&&d.purchGroups.map((g,gi)=>(
+                              <div key={gi}>
+                                <div onClick={()=>setExpandPurch(p=>({...p,[gi]:!p[gi]}))} style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",marginTop:2}}>
+                                  <span style={{fontSize:T.fs10,color:g.color,fontWeight:700}}>{g.label}</span>
+                                  <span style={{fontSize:T.fs10,color:g.color,fontFamily:T.fontMono}}>+{g.totalQty}</span>
+                                  <span style={{fontSize:9,color:T.textMuted}}>{expandPurch[gi]?"▲":"▼"}</span>
+                                </div>
+                                {expandPurch[gi]&&g.items.map((p,pi)=>(
+                                  <span key={pi} style={{fontSize:9,color:g.color,display:"block",paddingLeft:8}}>{fmtDate(p.date)} · +{p.qty}</span>
+                                ))}
+                              </div>
                             ))}
-                            {d.date&&!d.purchDates&&<span style={{color:T.textMuted,fontSize:T.fs10,display:"block"}}>{fmtDate(d.date)}</span>}
+                            {d.date&&!d.purchGroups&&<span style={{color:T.textMuted,fontSize:T.fs10,display:"block"}}>{fmtDate(d.date)}</span>}
                           </div>
                         </div>
                         <div style={{textAlign:"right",flexShrink:0}}>
                           <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:bc}}>{d.qty} <span style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</span></div>
-                          {si.value>0&&<div style={{fontFamily:T.fontMono,fontSize:T.fs10,color:bc,opacity:0.8}}>{fmtCur(d.qty*Number(si.value))}</div>}
+                          {si.value>0&&<div style={{fontFamily:T.fontMono,fontSize:T.fs10,fontWeight:700,color:bc}}>{fmtCur(d.qty*Number(si.value))}</div>}
                         </div>
                       </div>
                       <div style={{position:"relative",height:14,background:T.surface,borderRadius:4,overflow:"hidden"}}>
@@ -1933,7 +1945,7 @@ function InstructionsTab() {
             <P>Dividida em três sub-abas: Histórico, Agendamentos e Evolução.</P>
             <Li><HL>Histórico</HL> — lista todas as contagens registradas, da mais recente para a mais antiga. Clique em qualquer contagem para expandir e ver: quantidade contabilizada, valor contabilizado, total adquirido, mínimo, máximo e status de cada insumo. A mais recente recebe a tag ÚLTIMA CONTAGEM.</Li>
             <Li><HL>Agendamentos</HL> — crie agendamentos informando nome e data. O contador só consegue acessar a contagem na data agendada ou em datas atrasadas ainda não realizadas. Ao reprovar uma contagem, um agendamento de Recontagem é criado automaticamente com prazo de 48 horas. Agendamentos concluídos somem da lista automaticamente.</Li>
-            <Li><HL>Evolução</HL> — selecione um insumo para ver o gráfico de barras comparando compras e contagens validadas ao longo do tempo. Selecione "TODOS OS INSUMOS" para ver o resumo geral com valor total adquirido e contabilizado.</Li>
+            <Li><HL>Evolução</HL> — selecione um insumo para ver o gráfico de barras comparando compras e contagens validadas ao longo do tempo. </Li>
             <Li>Para <HL color={T.green}>validar</HL>: os valores contabilizados passam a ser o estoque oficial, o agendamento é concluído e o sistema verifica se há itens abaixo do máximo para sugerir compras. Para <HL color={T.red}>reprovar</HL>: a contagem é marcada como reprovada e um agendamento de recontagem é criado automaticamente.</Li>
             <Tip text="💡 Apenas contagens validadas alimentam a programação de compras e a tela de evolução." color={T.accent}/>
           </Acc>
