@@ -611,7 +611,7 @@ function ManagerPanel({data,onBack}) {
         </div>
       </div>
       <div style={{padding:"18px 16px"}}>
-        {tab===0&&<DashTab items={items} countings={countings} scheduledDates={scheduledDates} onNavigate={navigate}/>}
+        {tab===0&&<DashTab items={items} countings={countings} scheduledDates={scheduledDates} purchases={purchases} onNavigate={navigate}/>}
         {tab===1&&<ItemsTab items={items} setItems={setItems} countings={countings}/>}
         {tab===2&&<CountTab items={items} countings={countings} setCountings={setCountings} setItems={setItems} scheduledDates={scheduledDates} setScheduledDates={setScheduledDates} purchases={purchases} initialSubTab={countSubTab}/>}
         {tab===3&&<BuyTab items={items} setItems={setItems} countings={countings} purchases={purchases} setPurchases={setPurchases} initialSubTab={buySubTab}/>}
@@ -623,10 +623,10 @@ function ManagerPanel({data,onBack}) {
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
-function DashTab({items,countings,scheduledDates,onNavigate}) {
+function DashTab({items,countings,scheduledDates,purchases,onNavigate}) {
   const [view,setView]=useState("cards"); // "cards" | "charts"
   const sortedCountings=[...countings].sort((a,b)=>Number(b.id||0)-Number(a.id||0));
-  const lastC=sortedCountings[0]||null;
+  const lastC=sortedCountings.find(c=>c.validated)||null;
   const lc={};if(lastC)(lastC.items||[]).forEach(ci=>{lc[ci.id]=ci.counted;});
 
   const vA=items.reduce((s,i)=>s+(Number(i.value||0)*getTotalAcquired(i)),0);
@@ -634,6 +634,40 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
   const ex=Object.keys(lc).length;
   const dQ=ex-items.length;
   const dV=vC-vA;
+  const qtdA=items.reduce((s,i)=>s+getTotalAcquired(i),0);
+  const qtdC=lastC?items.reduce((s,i)=>s+(lc[i.id]??0),0):null;
+  const dQtd=qtdC!==null?qtdC-qtdA:null;
+  const colorQtdC=qtdC===null?T.textMuted:qtdC<qtdA?T.red:qtdC===qtdA?T.green:T.purple;
+  const colorDQtd=dQtd===null?T.textMuted:dQtd===0?T.green:dQtd>0?T.purple:T.red;
+
+  // Programação de compras
+  const dashLastC=sortedCountings.find(c=>c.validated)||null;
+  const dashLc={};if(dashLastC)(dashLastC.items||[]).forEach(ci=>{dashLc[ci.id]=ci.counted;});
+  const getPostBoughtDash=(itemId)=>{
+    if(!dashLastC) return (purchases||[]).filter(p=>p.itemId===itemId).reduce((s,p)=>s+Number(p.qty||0),0);
+    return (purchases||[]).filter(p=>p.itemId===itemId&&(p.date||"")>=dashLastC.date).reduce((s,p)=>s+Number(p.qty||0),0);
+  };
+  const getTotalBoughtDash=(itemId)=>(purchases||[]).filter(p=>p.itemId===itemId).reduce((s,p)=>s+Number(p.qty||0),0);
+  const needItems=items.filter(i=>{
+    const alreadyBought=getTotalBoughtDash(i.id);
+    const hasValidated=dashLc[i.id]!==undefined;
+    const postBought=getPostBoughtDash(i.id);
+    const base=hasValidated?(dashLc[i.id]+postBought):alreadyBought;
+    if(i.max&&base<i.max) return true;
+    if(!i.max&&i.min&&base<i.min) return true;
+    return false;
+  }).map(i=>{
+    const alreadyBought=getTotalBoughtDash(i.id);
+    const hasValidated=dashLc[i.id]!==undefined;
+    const postBought=getPostBoughtDash(i.id);
+    const base=hasValidated?(dashLc[i.id]+postBought):alreadyBought;
+    const need=i.max?Math.max(i.max-base,0):Math.max((i.min||0)-base,0);
+    return{...i,need,est:Number(i.value||0)*need};
+  }).filter(i=>i.need>0);
+  const totalNeedItems=needItems.length;
+  const totalNeedQty=needItems.reduce((s,i)=>s+i.need,0);
+  const totalNeedVal=needItems.reduce((s,i)=>s+i.est,0);
+  const colorNeed=items.length===0||totalNeedItems===0?T.textMuted:T.red;
 
   const abMin=items.filter(i=>i.min&&(lc[i.id]??0)<i.min).length;
   const acMax=items.filter(i=>i.max&&(lc[i.id]??0)>i.max).length;
@@ -646,7 +680,7 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
   const countingsPendingVal=sortedCountings.filter(c=>!c.validated).length;
 
   // Colors driven by comparison logic
-  const colorContabilizados = !lastC ? T.textSub : ex===items.length ? T.green : ex<items.length ? T.red : T.green;
+  const colorContabilizados = !lastC ? T.textMuted : ex===items.length ? T.green : ex<items.length ? T.red : T.purple;
   const colorDiffQtd = !lastC ? T.textSub : dQ>=0 ? T.green : T.red;
   const colorVContabilizado = !lastC ? T.textSub : vC===0&&vA===0 ? T.textSub : vC<vA ? T.red : T.green;
   const colorDiffVal = !lastC ? T.textSub : dV>=0 ? T.green : T.red;
@@ -757,82 +791,167 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
           </div>
         );
 
+        // Novos: qtd adquirida vs contabilizada, e itens dentro da margem
+        const noQtd   = qtdA===0;
+        const qtdColor= noQtd||qtdC===null?T.textMuted:qtdC<qtdA?T.red:qtdC===qtdA?T.green:T.purple;
+        const noMargin= !lastC||items.length===0;
+        const inRangeColor= noMargin?T.textMuted:inRange===items.length?T.green:inRange>0?T.yellow:T.red;
+
+        const noNeed = items.length===0;
+        const needColor = noNeed||totalNeedVal===0?T.textMuted:T.red;
+        const SectionLabel=({label})=>(
+          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:4,paddingLeft:2}}>{label}</div>
+        );
+
+        // Pill de seção dentro do card
+        const Sec=({label,color=T.textMuted})=>(
+          <div style={{fontSize:8,color,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,
+            background:color+"18",borderRadius:4,padding:"2px 6px",alignSelf:"flex-start",marginBottom:2}}>{label}</div>
+        );
+
         return(
+        <>
+        {/* Linha 1: Insumos, Quantidades, Status */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-          {/* Gráfico 1: Insumos contabilizados */}
-          <div style={{...S.card({padding:"16px 12px"}),display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
-            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>🧮 INSUMOS CONTABILIZADOS</div>
-            <PieChart size={140} slices={[
-              {value:lastC&&ex>0?ex:0,       color:contColor,  empty:noInsumos||!lastC||ex===0},
+          {/* G1: Insumos contabilizados */}
+          <div style={{...S.card({padding:"14px 12px"}),display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+            <Sec label="INSUMOS"/>
+            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,textAlign:"center"}}>🧮 INSUMOS CONTABILIZADOS</div>
+            <PieChart size={130} slices={[
+              {value:lastC&&ex>0?ex:0, color:contColor, empty:noInsumos||!lastC||ex===0},
               {value:noInsumos?1:Math.max(items.length-(lastC?ex:0),0), color:T.surface, empty:noInsumos},
             ]}/>
             <div style={{width:"100%"}}>
-              <DataRow label="INSUMOS CADASTRADOS"    value={noInsumos?"—":items.length}           color={noInsumos?T.textMuted:T.accent}/>
-              <DataRow label="INSUMOS CONTABILIZADOS" value={!lastC||ex===0?"—":ex}                color={contColor}/>
-              <DataRow label="DIFERENÇA EM QUANTIDADE" value={fmtDiff(contDiff)}                   color={diffColor(contDiff)}/>
+              <DataRow label="INSUMOS CADASTRADOS"    value={noInsumos?"—":items.length}  color={noInsumos?T.textMuted:T.accent}/>
+              <DataRow label="INSUMOS CONTABILIZADOS" value={!lastC||ex===0?"—":ex}       color={contColor}/>
+              <DataRow label="DIFERENÇA (INSUMOS)"    value={fmtDiff(contDiff)}           color={diffColor(contDiff)}/>
             </div>
           </div>
-          {/* Gráfico 2: Valor total contabilizado */}
-          <div style={{...S.card({padding:"16px 12px"}),display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
-            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>💰 VALOR TOTAL CONTABILIZADO</div>
-            <PieChart size={140} slices={[
-              {value:lastC&&vC>0?vC:0,         color:valColor,  empty:noValor||!lastC||vC===0},
+          {/* G2: Quantidade total contabilizada */}
+          <div style={{...S.card({padding:"14px 12px"}),display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+            <Sec label="QUANTIDADES"/>
+            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,textAlign:"center"}}>📊 QUANTIDADE TOTAL CONTABILIZADA</div>
+            <PieChart size={130} slices={[
+              {value:qtdC!==null&&qtdC>0?qtdC:0, color:qtdColor, empty:noQtd||qtdC===null||qtdC===0},
+              {value:noQtd?1:Math.max(qtdA-(qtdC||0),0), color:T.surface, empty:noQtd},
+            ]}/>
+            <div style={{width:"100%"}}>
+              <DataRow label="QUANTIDADE TOTAL ADQUIRIDA"     value={noQtd?"—":qtdA}            color={noQtd?T.textMuted:T.accent}/>
+              <DataRow label="QUANTIDADE TOTAL CONTABILIZADA" value={qtdC===null||qtdC===0?"—":qtdC} color={qtdColor}/>
+              <DataRow label="DIFERENÇA (QUANTIDADE)"  value={dQtd===null?"—":`${dQtd>0?"+":""}${dQtd}`} color={diffColor(dQtd)}/>
+            </div>
+          </div>
+          {/* G3: Itens dentro da margem */}
+          <div style={{...S.card({padding:"14px 12px"}),display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+            <Sec label="STATUS DAS QUANTIDADES"/>
+            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,textAlign:"center"}}>✅ ITENS DENTRO DA MARGEM</div>
+            <PieChart size={130} slices={[
+              {value:noMargin?0:inRange, color:inRangeColor, empty:noMargin||inRange===0},
+              {value:noMargin?1:Math.max(items.length-inRange,0), color:T.surface, empty:noMargin},
+            ]}/>
+            <div style={{width:"100%"}}>
+              <DataRow label="ITENS ABAIXO DO MÍNIMO" value={noMargin?"—":abMin}   color={noMargin?T.textMuted:abMin>0?T.red:T.green}/>
+              <DataRow label="ITENS DENTRO DA MARGEM" value={noMargin?"—":inRange} color={noMargin?T.textMuted:inRangeColor}/>
+              <DataRow label="ITENS ACIMA DO MÁXIMO"  value={noMargin?"—":acMax}   color={noMargin?T.textMuted:acMax>0?T.purple:T.green}/>
+            </div>
+          </div>
+        </div>
+        {/* Linha 2: Capital, Programação, Contagens */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8,marginTop:14}}>
+          {/* G4: Valor total contabilizado */}
+          <div style={{...S.card({padding:"14px 12px"}),display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+            <Sec label="CAPITAL"/>
+            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,textAlign:"center"}}>💰 VALOR TOTAL CONTABILIZADO</div>
+            <PieChart size={130} slices={[
+              {value:lastC&&vC>0?vC:0, color:valColor, empty:noValor||!lastC||vC===0},
               {value:noValor?1:Math.max(vA-(lastC?vC:0),0), color:T.surface, empty:noValor},
             ]}/>
             <div style={{width:"100%"}}>
               <DataRow label="VALOR TOTAL ADQUIRIDO"     value={noValor?"—":fmtCur(vA)}        color={noValor?T.textMuted:T.accent}/>
               <DataRow label="VALOR TOTAL CONTABILIZADO" value={!lastC||vC===0?"—":fmtCur(vC)} color={valColor}/>
-              <DataRow label="DIFERENÇA EM VALOR"        value={fmtDiff(valDiff,true)}          color={diffColor(valDiff)}/>
+              <DataRow label="DIFERENÇA (VALOR)"         value={fmtDiff(valDiff,true)}          color={diffColor(valDiff)}/>
             </div>
           </div>
-          {/* Gráfico 3: Contagens validadas */}
-          <div style={{...S.card({padding:"16px 12px"}),display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
-            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>✅ CONTAGENS VALIDADAS</div>
-            <PieChart size={140} slices={[
-              {value:countingsValidated,                           color:validColor, empty:noCount||countingsValidated===0},
+          {/* G5: Valor total previsto */}
+          <div style={{...S.card({padding:"14px 12px"}),display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+            <Sec label="PROGRAMAÇÃO DE COMPRAS"/>
+            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,textAlign:"center"}}>💸 VALOR TOTAL PREVISTO</div>
+            <PieChart size={130} slices={[
+              {value:noNeed||totalNeedVal===0?0:totalNeedVal, color:needColor, empty:noNeed||totalNeedVal===0},
+              {value:noNeed||totalNeedVal===0?1:Math.max(vA-totalNeedVal,0), color:T.surface, empty:noNeed||totalNeedVal===0||vA===0},
+            ]}/>
+            <div style={{width:"100%"}}>
+              <DataRow label="VALOR TOTAL ADQUIRIDO"  value={vA===0?"—":fmtCur(vA)}                            color={vA===0?T.textMuted:T.accent}/>
+              <DataRow label="VALOR TOTAL PREVISTO"   value={noNeed||totalNeedVal===0?"—":fmtCur(totalNeedVal)} color={needColor}/>
+              <DataRow label="QUANTIDADE NECESSÁRIA"  value={noNeed||totalNeedQty===0?"—":totalNeedQty}         color={needColor}/>
+            </div>
+          </div>
+          {/* G6: Contagens validadas */}
+          <div style={{...S.card({padding:"14px 12px"}),display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+            <Sec label="STATUS DAS CONTAGENS"/>
+            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,textAlign:"center"}}>✅ CONTAGENS VALIDADAS</div>
+            <PieChart size={130} slices={[
+              {value:countingsValidated, color:validColor, empty:noCount||countingsValidated===0},
               {value:noCount?1:Math.max(sortedCountings.length-countingsValidated,0), color:T.surface, empty:noCount},
             ]}/>
             <div style={{width:"100%"}}>
-              <DataRow label="CONTAGENS REGISTRADAS" value={noCount?"—":sortedCountings.length}       color={noCount?T.textMuted:T.accent}/>
-              <DataRow label="CONTAGENS VALIDADAS"   value={noCount||countingsValidated===0?"—":countingsValidated} color={validColor}/>
-              <DataRow label="CONTAGENS PENDENTES"   value={noCount||countingsPendingVal===0?"—":countingsPendingVal} color={noCount?T.textMuted:countingsPendingVal>0?T.yellow:T.green}/>
+              <DataRow label="CONTAGENS REGISTRADAS" value={noCount?"—":sortedCountings.length}                         color={noCount?T.textMuted:T.accent}/>
+              <DataRow label="CONTAGENS VALIDADAS"   value={noCount||countingsValidated===0?"—":countingsValidated}     color={validColor}/>
+              <DataRow label="CONTAGENS PENDENTES"   value={noCount||countingsPendingVal===0?"—":countingsPendingVal}   color={noCount?T.textMuted:countingsPendingVal>0?T.yellow:T.green}/>
             </div>
           </div>
         </div>
+        </>
         );
       })()}
 
       {view==="cards"&&<div>
 
-      {/* LINHA 1 */}
+      {/* INSUMOS */}
+      <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>INSUMOS</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
         <Card icon="📦" label="INSUMOS CADASTRADOS"     value={items.length===0?"—":items.length}        color={items.length===0?T.textMuted:T.accent}            onClick={()=>onNavigate(1)}/>
         <Card icon="🧮" label="INSUMOS CONTABILIZADOS"  value={lastC?ex:"—"} color={lastC?colorContabilizados:T.textMuted} onClick={()=>onNavigate(2)}/>
-        <Card icon="🔢" label="DIFERENÇA EM QUANTIDADE" value={lastC?`${dQ>0?"+":""}${dQ}`:"—"} color={lastC?colorDiffQtd:T.textMuted} onClick={()=>onNavigate(2,"evolution")}/>
+        <Card icon="🔢" label="DIFERENÇA (INSUMOS)"     value={lastC?`${dQ>0?"+":""}${dQ}`:"—"} color={lastC?colorDiffQtd:T.textMuted} onClick={()=>onNavigate(2,"evolution")}/>
       </div>
 
-      {/* LINHA 2 */}
+      {/* QUANTIDADES */}
+      <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>QUANTIDADES</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-        <Card icon="💳" label="VALOR TOTAL ADQUIRIDO"     value={vA===0?"—":fmtCur(vA)}            color={vA===0?T.textMuted:T.accent}           onClick={()=>onNavigate(3,"history")}/>
-        <Card icon="💰" label="VALOR TOTAL CONTABILIZADO" value={lastC&&vC>0?fmtCur(vC):"—"} color={lastC&&vC>0?colorVContabilizado:T.textMuted} onClick={()=>onNavigate(2)}/>
-        <Card icon="💹" label="DIFERENÇA EM VALOR"        value={lastC?fmtCur(dV):"—"}  color={lastC?colorDiffVal:T.textMuted}       onClick={()=>onNavigate(2,"evolution")}/>
+        <Card icon="📥" label="QUANTIDADE TOTAL ADQUIRIDA"     value={qtdA===0?"—":qtdA}                              color={qtdA===0?T.textMuted:T.accent}      onClick={()=>onNavigate(3,"history")}/>
+        <Card icon="📊" label="QUANTIDADE TOTAL CONTABILIZADA" value={qtdC===null?"—":qtdC}                           color={qtdC===null?T.textMuted:colorQtdC}  onClick={()=>onNavigate(2)}/>
+        <Card icon="⚖️" label="DIFERENÇA (QUANTIDADE)"         value={dQtd===null?"—":`${dQtd>0?"+":""}${dQtd}`}     color={colorDQtd}                          onClick={()=>onNavigate(2,"evolution")}/>
       </div>
 
       {/* STATUS DAS QUANTIDADES */}
-      {lastC&&(
-        <div style={{marginBottom:8}}>
-          <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Status das quantidades</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-            <Card icon="⬇️" label="ITENS ABAIXO DO MÍNIMO" value={abMin}   color={abMin>0?T.red:T.green}    onClick={()=>onNavigate(1)}/>
-            <Card icon="✅" label="ITENS DENTRO DA MARGEM"  value={inRange} color={inRange===items.length?T.green:inRange>0?T.green:T.red} onClick={()=>onNavigate(1)}/>
-            <Card icon="⬆️" label="ITENS ACIMA DO MÁXIMO"   value={acMax}   color={acMax===0?T.green:T.purple} onClick={()=>onNavigate(1)}/>
-          </div>
+      <div style={{marginBottom:8}}>
+        <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>STATUS DAS QUANTIDADES</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+          <Card icon="⬇️" label="ITENS ABAIXO DO MÍNIMO" value={!lastC?"—":abMin}   color={!lastC?T.textMuted:abMin>0?T.red:T.green}    onClick={()=>onNavigate(1)}/>
+          <Card icon="✅" label="ITENS DENTRO DA MARGEM"  value={!lastC?"—":inRange} color={!lastC?T.textMuted:inRange===items.length?T.green:inRange>0?T.green:T.red} onClick={()=>onNavigate(1)}/>
+          <Card icon="⬆️" label="ITENS ACIMA DO MÁXIMO"   value={!lastC?"—":acMax}   color={!lastC?T.textMuted:acMax===0?T.green:T.purple} onClick={()=>onNavigate(1)}/>
         </div>
-      )}
+      </div>
+
+      {/* CAPITAL */}
+      <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>CAPITAL</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+        <Card icon="💳" label="VALOR TOTAL ADQUIRIDO"     value={vA===0?"—":fmtCur(vA)}            color={vA===0?T.textMuted:T.accent}           onClick={()=>onNavigate(3,"history")}/>
+        <Card icon="💰" label="VALOR TOTAL CONTABILIZADO" value={lastC&&vC>0?fmtCur(vC):"—"} color={lastC&&vC>0?colorVContabilizado:T.textMuted} onClick={()=>onNavigate(2)}/>
+        <Card icon="💹" label="DIFERENÇA (VALOR)"         value={lastC?fmtCur(dV):"—"}  color={lastC?colorDiffVal:T.textMuted}       onClick={()=>onNavigate(2,"evolution")}/>
+      </div>
+
+      {/* PROGRAMAÇÃO DE COMPRAS */}
+      <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>PROGRAMAÇÃO DE COMPRAS</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+        <Card icon="🛒" label="INSUMOS NECESSÁRIOS"  value={items.length===0?"—":totalNeedItems}  color={items.length===0?T.textMuted:colorNeed}  onClick={()=>onNavigate(3,"program")}/>
+        <Card icon="📦" label="QUANTIDADE NECESSÁRIA" value={items.length===0?"—":totalNeedQty}   color={items.length===0?T.textMuted:colorNeed}  onClick={()=>onNavigate(3,"program")}/>
+        <Card icon="💸" label="VALOR TOTAL PREVISTO"  value={items.length===0?"—":fmtCur(totalNeedVal)} color={items.length===0?T.textMuted:colorNeed} onClick={()=>onNavigate(3,"program")}/>
+      </div>
 
       {/* STATUS DAS CONTAGENS */}
       <div style={{marginBottom:8}}>
-        <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Status das contagens</div>
+        <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>STATUS DAS CONTAGENS</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           <Card
             icon="📋"
@@ -1338,6 +1457,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
   const [buyModal,setBuyModal]=useState(null);
   const [editPurchaseId,setEditPurchaseId]=useState(null);
   const [buyQty,setBuyQty]=useState("");
+  const [buyUnitValue,setBuyUnitValue]=useState("");
   const [buyDate,setBuyDate]=useState(todayStr());
   const [buyNote,setBuyNote]=useState("");
   const [buyAttach,setBuyAttach]=useState(null);
@@ -1345,35 +1465,41 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
   const [confirmDel,setConfirmDel]=useState(null);
   const buyFileRef=useRef();
 
-  const openBuy=(it)=>{setEditPurchaseId(null);setBuyModal(it);setBuyQty(String(it.need));setBuyDate(todayStr());setBuyNote("");setBuyAttach(null);setBuyAttachName("");};
+  const openBuy=(it)=>{setEditPurchaseId(null);setBuyModal(it);setBuyQty(String(it.need));setBuyUnitValue(String(it.value||""));setBuyDate(todayStr());setBuyNote("");setBuyAttach(null);setBuyAttachName("");};
   const openEditPurchase=(p)=>{
     const it=items.find(i=>i.id===p.itemId);
     setEditPurchaseId(p.id);
     setBuyModal(it||{id:p.itemId,name:p.itemName,unit:"",value:0,need:0});
-    setBuyQty(String(p.qty));setBuyDate(p.date);setBuyNote(p.note||"");setBuyAttach(p.attachment||null);setBuyAttachName(p.attachmentName||"");
+    setBuyQty(String(p.qty));setBuyUnitValue(String(p.unitValue||it?.value||""));setBuyDate(p.date);setBuyNote(p.note||"");setBuyAttach(p.attachment||null);setBuyAttachName(p.attachmentName||"");
   };
 
   const confirmBuy=()=>{
     const qty=Number(buyQty);
     if(!qty||qty<=0) return;
+    const newUnitValue=buyUnitValue!==""?Number(buyUnitValue):null;
     if(editPurchaseId!==null){
-      // Edit existing purchase in global list
-      setPurchases(prev=>(prev||[]).map(p=>p.id===editPurchaseId?{...p,qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName}:p));
-      // Also update inline purchase inside item
+      // Edit: save unitValue on purchase record (for historical integrity), update item.value if changed
+      const uv=newUnitValue!==null?newUnitValue:Number(buyModal.value||0);
+      setPurchases(prev=>(prev||[]).map(p=>p.id===editPurchaseId?{...p,qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName,unitValue:uv,itemValue:uv}:p));
       setItems(prev=>prev.map(it=>{
         if(it.id!==buyModal.id) return it;
-        return {...it,purchases:(it.purchases||[]).map(p=>p.id===editPurchaseId?{...p,qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName}:p)};
+        const updatedPurchases=(it.purchases||[]).map(p=>p.id===editPurchaseId?{...p,qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName,unitValue:uv}:p);
+        // Update item.value going forward — past purchases keep their own unitValue
+        return newUnitValue!==null?{...it,value:newUnitValue,purchases:updatedPurchases}:{...it,purchases:updatedPurchases};
       }));
     } else {
-      // New purchase — type based on whether item already has purchases
+      // New purchase — snapshot current unit value on the purchase record
+      const uv=newUnitValue!==null?newUnitValue:Number(buyModal.value||0);
       const currentItem=items.find(i=>i.id===buyModal.id);
       const isFirstPurchase=!(currentItem?.purchases||[]).length&&!(purchases||[]).filter(p=>p.itemId===buyModal.id).length;
       const pType=isFirstPurchase?"initial":"reposition";
-      const purchase={id:Date.now(),itemId:buyModal.id,itemName:buyModal.name,itemValue:Number(buyModal.value||0),qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName,pType};
+      const purchase={id:Date.now(),itemId:buyModal.id,itemName:buyModal.name,itemValue:uv,unitValue:uv,qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName,pType};
       setPurchases(prev=>[...(prev||[]),purchase]);
       setItems(prev=>prev.map(it=>{
         if(it.id!==buyModal.id) return it;
-        return {...it,purchases:[...(it.purchases||[]),{id:purchase.id,qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName,pType}]};
+        // Update item.value going forward if user changed it
+        const base=newUnitValue!==null?{...it,value:newUnitValue}:it;
+        return {...base,purchases:[...(it.purchases||[]),{id:purchase.id,qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName,unitValue:uv,pType}]};
       }));
     }
     setBuyModal(null);setEditPurchaseId(null);
@@ -1431,6 +1557,12 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
             <div style={{fontSize:T.fs13,color:T.textSub,marginBottom:14}}>{buyModal.name}</div>
             <div style={S.label}>Quantidade comprada</div>
             <input type="number" value={buyQty} onChange={e=>setBuyQty(e.target.value)} onBlur={e=>{const n=parseFloat(e.target.value);if(!isNaN(n))setBuyQty(String(n));}} style={{...S.input({marginBottom:10})}}/>
+            <div style={S.label}>Valor unitário</div>
+            <div style={{position:"relative",marginBottom:10}}>
+              <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:T.fs12,color:T.textMuted,pointerEvents:"none"}}>R$</span>
+              <input type="number" step="0.01" placeholder={String(buyModal.value||"0,00")} value={buyUnitValue} onChange={e=>setBuyUnitValue(e.target.value)} style={{...S.input({paddingLeft:32})}}/>
+            </div>
+            {buyUnitValue!==""&&Number(buyUnitValue)!==Number(buyModal.value||0)&&<div style={{fontSize:T.fs11,color:T.yellow,marginBottom:10}}>⚠️ O valor unitário do insumo será atualizado de {fmtCur(buyModal.value||0)} para {fmtCur(Number(buyUnitValue))} a partir desta compra.</div>}
             <div style={S.label}>Data da compra</div>
             <input type="date" value={buyDate} onChange={e=>setBuyDate(e.target.value)} style={{...S.input({marginBottom:10})}}/>
             <div style={S.label}>Observação (opcional)</div>
@@ -1441,7 +1573,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
             {buyAttach?.startsWith("data:image")&&<img src={buyAttach} alt="" style={{width:"100%",maxHeight:90,objectFit:"cover",borderRadius:8,marginBottom:10}}/>}
             <div style={{display:"flex",gap:8}}>
               <button onClick={confirmBuy} style={S.btn(T.green)}>{editPurchaseId?"Salvar":"Confirmar"}</button>
-              <button onClick={()=>{setBuyModal(null);setEditPurchaseId(null);}} style={{...S.btn(T.surface),border:`1px solid ${T.border}`,color:T.textSub}}>Cancelar</button>
+              <button onClick={()=>{setBuyModal(null);setEditPurchaseId(null);setBuyUnitValue("");}} style={{...S.btn(T.surface),border:`1px solid ${T.border}`,color:T.textSub}}>Cancelar</button>
             </div>
           </div>
         </div>
@@ -1659,10 +1791,10 @@ function EvoTab({items,countings,purchases}) {
       {selItem==="all"&&items.length>0&&(()=>{
         const lastVal=[...countings].filter(c=>c.validated).sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0];
         // Totals
-        const totCad=items.length;
+        const totCad=items.reduce((s,i)=>s+getTotalAcquired(i),0);
         const totCont=lastVal?items.reduce((s,i)=>{
           const ci=(lastVal.items||[]).find(x=>x.id===i.id);
-          return s+(ci?1:0);
+          return s+(ci?.counted??0);
         },0):null;
         const totDiffQtd=totCont!==null?totCont-totCad:null;
         const totAcqVal=items.reduce((s,i)=>s+Number(i.value||0)*getTotalAcquired(i),0);
@@ -1697,11 +1829,11 @@ function EvoTab({items,countings,purchases}) {
                       <div style={{fontWeight:700,fontSize:T.fs12,color:T.text,marginBottom:4}}>{i.name}</div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
                         <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
-                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Insumos cadastrados</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.accent}}>1</div>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Quantidade total adquirida</div>
+                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.accent}}>{acq}</div>
                         </div>
                         <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
-                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Insumos contabilizados</div>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Quantidade total contabilizada</div>
                           <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:ci?dc:T.textMuted}}>{ci?counted:"—"}</div>
                         </div>
                         <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
@@ -1727,11 +1859,16 @@ function EvoTab({items,countings,purchases}) {
                 {/* Totalization row */}
                 <div style={{marginTop:12,paddingTop:12,borderTop:`2px solid ${T.border}`}}>
                   <div style={{fontSize:T.fs11,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:8}}>Totalização</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-                    <Cel label="Insumos cadastrados"    value={totCad}                                              color={T.accent}/>
-                    <Cel label="Insumos contabilizados" value={totCont!==null?totCont:"—"}                         color={totCont!==null?diffColor(totCont-totCad):T.textMuted}/>
-                    <Cel label="Diferença em quantidade" value={totDiffQtd!==null?(totDiffQtd>0?`+${totDiffQtd}`:String(totDiffQtd)):"—"} color={diffColor(totDiffQtd)}/>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:6}}>
+                    <Cel label="Quantidade total adquirida"     value={totCad}                                                                    color={T.accent}/>
+                    <Cel label="Quantidade total contabilizada" value={totCont!==null?totCont:"—"}                                                color={totCont!==null?diffColor(totCont-totCad):T.textMuted}/>
+                    <Cel label="Diferença em quantidade"        value={totDiffQtd!==null?(totDiffQtd>0?`+${totDiffQtd}`:String(totDiffQtd)):"—"} color={diffColor(totDiffQtd)}/>
                   </div>
+                  {totAcqVal>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                    <Cel label="Valor total adquirido"     value={fmtCur(totAcqVal)}                                                                   color={T.accent}/>
+                    <Cel label="Valor total contabilizado" value={totContVal!==null?fmtCur(totContVal):"—"}                                            color={totContVal!==null?diffColor(totContVal-totAcqVal):T.textMuted}/>
+                    <Cel label="Diferença em valor"        value={totDiffVal!==null?(totDiffVal>0?`+${fmtCur(totDiffVal)}`:fmtCur(totDiffVal)):"—"}    color={diffColor(totDiffVal)}/>
+                  </div>}
                 </div>
               </>
             )}
@@ -1750,12 +1887,12 @@ function EvoTab({items,countings,purchases}) {
             {/* Row 1: quantities */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
               <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
-                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Insumos cadastrados</div>
-                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.accent}}>1</div>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Quantidade total adquirida</div>
+                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.accent}}>{totalAcquired}</div>
                 <div style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</div>
               </div>
               <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
-                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Insumos contabilizados</div>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Quantidade total contabilizada</div>
                 <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:diff===null?T.textSub:lastCountedQty<totalAcquired?T.red:lastCountedQty===totalAcquired?T.green:T.purple}}>{lastCounting?lastCountedQty:"—"}</div>
                 <div style={{fontSize:T.fs10,color:T.textMuted}}>{lastCounting?fmtDate(lastCounting.date):"Sem contagem"}</div>
               </div>
