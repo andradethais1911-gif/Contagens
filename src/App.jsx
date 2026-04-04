@@ -230,19 +230,9 @@ function openWA(url) {
 function buildWAMsg(counting, items) {
   const lines=(counting.items||[]).map(ci=>{
     const it=items.find(i=>i.id===ci.id)||ci;
-    const min=it.min?` | Mínimo: ${it.min}`:"";
-    const max=it.max?` | Máximo: ${it.max}`:"";
-    return `  • *${ci.name}*\n    Contabilizado: ${ci.counted??0} ${it.unit||""}${min}${max}`;
+    return `  - ${ci.name}: ${ci.counted??0} ${it.unit||""}`;
   }).join("\n");
-  const ab=(counting.items||[]).filter(ci=>{const it=items.find(i=>i.id===ci.id)||ci;return it.min&&ci.counted<it.min;});
-  const alertas=ab.length?`\n\n⚠️ *Insumos abaixo do mínimo:*\n${ab.map(ci=>{const it=items.find(i=>i.id===ci.id)||ci;return`  • ${ci.name}: *${ci.counted??0}* (mínimo: ${it.min})`;}).join("\n")}`:"";
-  const compras=ab.map(ci=>{
-    const it=items.find(i=>i.id===ci.id)||ci;
-    const need=it.max?Math.max(it.max-ci.counted,0):Math.max(it.min-ci.counted,0);
-    return `  • ${ci.name}: *+${need} ${it.unit||""}*`;
-  });
-  const comprasMsg=compras.length?`\n\n🛒 *Necessidade de Compra:*\n${compras.join("\n")}`:"";
-  return `Olá, Teresa!\n\nSegue o relatório da *${counting.label}* referente a ${fmtDate(counting.date)}, com as quantidades contabilizadas e a necessidade de compra conforme o levantamento realizado.\n\n📋 *Quantidades contabilizadas:*\n${lines}${alertas}${comprasMsg}\n\n_Sistema de Gestão de Contagens_`;
+  return `Olá, Teresa.\n\nSegue o relatório da contagem *${counting.label}*, realizada em ${fmtDate(counting.date)}.\n\n*Quantidades contabilizadas:*\n${lines}\n\nSolicito que acesse o sistema para verificar e validar esta contagem. Ao aprovar, o sistema gerará automaticamente a programação de compras para os insumos que precisam de reposição. Caso a contagem seja reprovada, um agendamento de recontagem será criado automaticamente. Nesse caso, por favor sinalize aqui via WhatsApp se será necessária a recontagem para que eu possa me programar.\n\n_Sistema de Gestão de Contagens_`;
 }
 
 function sendWA(phone, counting, items) {
@@ -250,7 +240,7 @@ function sendWA(phone, counting, items) {
 }
 
 function sendWABlocked(phone, reason, nextFuture) {
-  const msg=`Olá, Teresa!\n\nEstou tentando realizar a contagem de estoque${nextFuture?` referente a *"${nextFuture.label}"* (prevista para ${fmtDate(nextFuture.date)})`:""}, mas o sistema não está permitindo o registro.\n\n⚠️ *Motivo:* ${reason}\n\nPor favor, verifique o agendamento ou libere o acesso para que eu possa realizar a contagem.\n\n_Sistema de Gestão de Contagens_`;
+  const msg=`Olá, Teresa.\n\nEstou tentando realizar a contagem de estoque${nextFuture?` referente a *${nextFuture.label}* (prevista para ${fmtDate(nextFuture.date)})`:""}, porém o sistema não está permitindo o acesso.\n\nMotivo: ${reason}\n\nPor favor, verifique o agendamento ou oriente como devo proceder.\n\n_Sistema de Gestão de Contagens_`;
   openWA(`https://wa.me/${normPhone(phone)}?text=${encodeURIComponent(msg)}`);
 }
 
@@ -423,8 +413,8 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
 
   if(!items.length) return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,fontFamily:T.fontBase,padding:24}}>
-      <div style={{fontSize:48}}>⚠️</div>
       <div style={{color:T.yellow,fontWeight:700,fontSize:T.fs16,textAlign:"center"}}>Nenhum insumo cadastrado.</div>
+      <div style={{fontSize:T.fs13,color:T.textMuted,textAlign:"center"}}>Peça à Teresa para cadastrar os insumos no sistema.</div>
       <button onClick={onBack} style={S.btn(T.accent)}>← Voltar</button>
     </div>
   );
@@ -432,9 +422,8 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
   // Done screen — must come BEFORE isBlocked check
   if(phase==="done") return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:0,fontFamily:T.fontBase,padding:24}}>
-      <div style={{width:72,height:72,background:`linear-gradient(135deg,${T.green},${T.greenDim})`,borderRadius:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,marginBottom:16}}>✅</div>
-      <div style={{fontFamily:T.fontMono,fontSize:T.fs20,color:T.green,textAlign:"center",marginBottom:6}}>CONTAGEM FINALIZADA!</div>
-      <div style={{fontSize:T.fs13,color:T.textMuted,textAlign:"center",marginBottom:24}}>Contagem salva. Agora envie o relatório para Teresa.</div>
+      <div style={{fontFamily:T.fontMono,fontSize:T.fs20,color:T.green,textAlign:"center",marginBottom:8,fontWeight:700}}>CONTAGEM FINALIZADA</div>
+      <div style={{fontSize:T.fs13,color:T.textMuted,textAlign:"center",marginBottom:24,lineHeight:1.6}}>Contagem salva com sucesso. Envie o relatório para Teresa para que ela possa verificar e validar no sistema.</div>
       <div style={{width:"100%",maxWidth:340,display:"flex",flexDirection:"column",gap:12}}>
         {whatsapp&&savedCounting?(
           <a
@@ -458,37 +447,35 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
 
   if(phase==="start") return (
     <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:T.fontBase,display:"flex",flexDirection:"column"}}>
-      <div style={{background:`linear-gradient(135deg,${T.accentDim}33,${T.bg})`,padding:"22px 18px 18px",borderBottom:`1px solid ${T.border}`}}>
-        <button onClick={onBack} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs13,marginBottom:10,padding:0}}>← Voltar</button>
-        <div style={{fontFamily:T.fontMono,fontSize:T.fs16,fontWeight:700,color:T.accent}}>🧮 ÁREA DO CONTADOR</div>
-        <div style={{fontSize:T.fs13,color:T.yellow,marginTop:4,fontWeight:600}}>{label}</div>
+      <div style={{background:T.surface,padding:"18px 18px 14px",borderBottom:`1px solid ${T.border}`}}>
+        <button onClick={onBack} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs13,marginBottom:10,padding:0,fontFamily:T.fontBase}}>← Voltar</button>
+        <div style={{fontFamily:T.fontMono,fontSize:T.fs15,fontWeight:700,color:T.accent,marginBottom:2}}>ÁREA DO CONTADOR</div>
+        <div style={{fontSize:T.fs13,color:T.text,fontWeight:600}}>{label}</div>
         {nextSched&&(
           <div style={{marginTop:6,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={{fontSize:T.fs12,color:T.textMuted}}>📅 Data prevista: <b style={{color:T.text}}>{fmtDate(nextSched.date)}</b></span>
+            <span style={{fontSize:T.fs12,color:T.textMuted}}>Data prevista: <b style={{color:T.text}}>{fmtDate(nextSched.date)}</b></span>
             {schedStatus==="overdue"&&<span style={S.tag(T.red)}>ATRASADA</span>}
             {schedStatus==="today"&&<span style={S.tag(T.green)}>HOJE</span>}
           </div>
         )}
       </div>
-      {nextSched&&(
-        <div style={{padding:"10px 18px",background:schedStatus==="overdue"?T.red+"12":T.yellow+"10",borderBottom:`1px solid ${schedStatus==="overdue"?T.red:T.yellow}25`}}>
-          <div style={{fontSize:T.fs13,fontWeight:600,color:schedStatus==="overdue"?T.red:T.yellow}}>
-            {schedStatus==="overdue"?`⚠️ Esta contagem deveria ter sido realizada em ${fmtDate(nextSched.date)}. Realize agora para regularizar.`:`📋 Contagem agendada para hoje — realize assim que possível.`}
-          </div>
+      {nextSched&&schedStatus==="overdue"&&(
+        <div style={{padding:"10px 18px",background:T.red+"10",borderBottom:`1px solid ${T.red}25`}}>
+          <div style={{fontSize:T.fs12,color:T.red,fontWeight:600}}>Esta contagem deveria ter sido realizada em {fmtDate(nextSched.date)}. Realize agora para regularizar.</div>
         </div>
       )}
       <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
         <div style={{width:"100%",maxWidth:380}}>
-          <div style={{...S.card({marginBottom:20,background:T.accent+"0a",border:`1px solid ${T.border}`,padding:"20px"})}}>
-            <div style={{fontWeight:700,color:T.accent,fontSize:T.fs14,marginBottom:14}}>📋 Como fazer a contagem</div>
-            {[["1.","Cada insumo aparece um por um na tela."],["2.","Vá até o local e conte fisicamente."],["3.","Digite a quantidade no teclado numérico."],["4.","Toque em ✓ para confirmar."],["5.","Toque em Próximo para o próximo item."],["6.","Ao finalizar, toque em Enviar Contagem."]].map(([n,t],i)=>(
+          <div style={{...S.card({marginBottom:20,padding:"20px"})}}>
+            <div style={{fontWeight:700,color:T.text,fontSize:T.fs14,marginBottom:14}}>Como realizar a contagem</div>
+            {[["1.","Cada insumo aparece um por um na tela."],["2.","Vá até o local e conte fisicamente."],["3.","Digite a quantidade no teclado numérico."],["4.","Toque em ✓ para confirmar."],["5.","Use o rodapé para navegar entre insumos."],["6.","Ao finalizar todos, toque em Finalizar contagem."]].map(([n,t],i)=>(
               <div key={i} style={{display:"flex",gap:10,marginBottom:8,alignItems:"flex-start"}}>
                 <span style={{fontSize:T.fs12,color:T.accent,fontWeight:700,fontFamily:T.fontMono,minWidth:18,lineHeight:1.6}}>{n}</span>
-                <span style={{fontSize:T.fs13,color:T.text,lineHeight:1.6}}>{t}</span>
+                <span style={{fontSize:T.fs13,color:T.textSub,lineHeight:1.6}}>{t}</span>
               </div>
             ))}
           </div>
-          <button onClick={()=>setPhase("counting")} style={{...S.btn(T.accent,true),padding:"14px",fontSize:T.fs15}}>▶ Iniciar — {total} {total===1?"insumo":"insumos"}</button>
+          <button onClick={()=>setPhase("counting")} style={{...S.btn(T.accent,true),padding:"14px",fontSize:T.fs14,fontWeight:700}}>Iniciar — {total} {total===1?"insumo":"insumos"}</button>
         </div>
       </div>
     </div>
@@ -511,7 +498,7 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
         <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:"18px 16px 0",overflowY:"auto"}}>
           <div style={{width:"100%",maxWidth:400}}>
             {/* Item card - NO min/max shown */}
-            <div style={{...S.card({marginBottom:14,textAlign:"center",padding:"24px 20px",border:`1.5px solid ${isConf?T.green:T.accent}40`,background:isConf?T.green+"08":T.accent+"08",boxShadow:`0 0 0 1px ${isConf?T.green:T.accent}15,0 4px 16px rgba(0,0,0,.3)`})}}>
+            <div style={{...S.card({marginBottom:14,textAlign:"center",padding:"24px 20px",border:`1.5px solid ${isConf?T.green:T.accent}40`,background:isConf?T.green+"08":T.accent+"08",})}}>
               <div style={{fontSize:T.fs11,color:T.textMuted,marginBottom:6,fontFamily:T.fontMono,letterSpacing:1,textTransform:"uppercase"}}>Insumo {current+1} de {total}</div>
               <div style={{fontSize:T.fs24,fontWeight:800,color:T.text,lineHeight:1.2,marginBottom:10}}>{item.name}</div>
               <span style={{display:"inline-flex",alignItems:"center",background:T.accent+"18",border:`1px solid ${T.accent}30`,borderRadius:20,padding:"4px 14px",fontSize:T.fs12,color:T.accent,fontWeight:600}}>{item.unit||"Unidade(s)"}</span>
@@ -536,12 +523,26 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
               </div>
             )}
             <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-              {!isConf&&<button onClick={doConfirm} disabled={inputVal===""} style={{...S.btn(inputVal!==""?T.green:T.textMuted,true),padding:"13px",fontSize:T.fs14,opacity:inputVal!==""?1:.45}}>✓ Confirmar</button>}
-              {isConf&&current<total-1&&<button onClick={doNext} style={{...S.btn(T.accent,true),padding:"13px",fontSize:T.fs14}}>Próximo → ({current+2}/{total})</button>}
+              {!isConf&&!allDone&&<button onClick={doConfirm} disabled={inputVal===""} style={{...S.btn(inputVal!==""?T.green:T.textMuted,true),padding:"13px",fontSize:T.fs14,opacity:inputVal!==""?1:.45}}>✓ Confirmar</button>}
+              {isConf&&current<total-1&&!allDone&&<button onClick={doNext} style={{...S.btn(T.accent,true),padding:"13px",fontSize:T.fs14}}>Próximo → ({current+2}/{total})</button>}
               {allDone&&(
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  <button onClick={doSend} style={{...S.btn(T.green,true),padding:"13px",fontSize:T.fs14}}>Finalizar contagem</button>
-                </div>
+                <>
+                  <button onClick={doSend} style={{...S.btn(T.green,true),padding:"14px",fontSize:T.fs15,fontWeight:700}}>Finalizar contagem</button>
+                  {whatsapp?(
+                    <a
+                      href={`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(buildWAMsg({id:0,label,date:countDate,items:items.map(i=>({...i,counted:counts[i.id]??0}))},items))}`}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{display:"block",width:"100%",background:T.accent,color:"#fff",fontWeight:700,fontSize:T.fs14,padding:"14px",borderRadius:10,textAlign:"center",textDecoration:"none",boxSizing:"border-box",fontFamily:T.fontBase}}
+                      onClick={doSend}
+                    >
+                      Enviar relatório para Teresa
+                    </a>
+                  ):(
+                    <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:"12px",textAlign:"center"}}>
+                      <div style={{fontSize:T.fs11,color:T.textMuted}}>Configure o WhatsApp na Aba Segurança para enviar o relatório para Teresa.</div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -561,7 +562,6 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
       <div style={{width:"100%",maxWidth:380}}>
         <button onClick={onBack} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs13,marginBottom:20,padding:0}}>← Voltar</button>
         <div style={{textAlign:"center",marginBottom:24}}>
-          <div style={{fontSize:52,marginBottom:12}}>🔒</div>
           <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.red,marginBottom:8}}>CONTAGEM BLOQUEADA</div>
           <div style={{fontSize:T.fs13,color:T.textMuted,lineHeight:1.7}}>Não há contagem agendada para hoje. Somente é possível realizar contagem nas datas agendadas.</div>
         </div>
@@ -574,12 +574,12 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
         )}
         {whatsapp&&(
           <div style={{...S.card({marginBottom:12,background:T.green+"08",border:`1px solid ${T.border}`,padding:"16px"})}}>
-            <div style={{fontSize:T.fs12,color:T.green,fontWeight:700,marginBottom:6}}>📲 Avisar o gerente</div>
+            <div style={{fontSize:T.fs13,color:T.text,fontWeight:700,marginBottom:6}}>Avisar Teresa</div>
             <div style={{fontSize:T.fs12,color:T.textMuted,marginBottom:10,lineHeight:1.6}}>Se você foi orientado a fazer a contagem hoje e o sistema está bloqueado, envie uma mensagem ao gerente explicando a situação.</div>
             {(()=>{
               const proximaInfo = nextFuture ? ` A próxima prevista é "${nextFuture.label}" em ${fmtDate(nextFuture.date)}.` : " Nenhuma contagem futura cadastrada.";
               const destinoInfo = nextFuture ? ` referente a *"${nextFuture.label}"* (prevista para ${fmtDate(nextFuture.date)})` : "";
-              const msg=`Olá, Teresa!\n\nEstou tentando realizar a contagem de estoque${destinoInfo}, mas o sistema não está permitindo o registro.\n\n⚠️ *Motivo:* Não há contagem agendada para hoje (${fmtDate(todayStr())}).${proximaInfo}\n\n_Sistema de Gestão de Contagens_`;
+              const msg=`Olá, Teresa.\n\nEstou tentando realizar a contagem de estoque${destinoInfo}, porém o sistema não está permitindo o acesso. Não há contagem agendada para hoje (${fmtDate(todayStr())}).${proximaInfo}\n\nPor favor, oriente como devo proceder.\n\n_Sistema de Gestão de Contagens_`;
               return(
                 <a href={`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer"
                   style={{display:"block",background:T.green,color:"#fff",fontWeight:700,fontSize:T.fs13,padding:"11px",borderRadius:10,textAlign:"center",textDecoration:"none",fontFamily:T.fontBase}}>
@@ -2194,16 +2194,16 @@ function InstructionsTab() {
             <Li><HL>2. Conte fisicamente</HL> — vá até o local, conte a quantidade presente e não estime.</Li>
             <Li><HL>3. Registre</HL> — use o teclado numérico para digitar a quantidade e toque em ✓ para confirmar.</Li>
             <Li><HL>4. Navegue</HL> — use as miniaturas no rodapé para ir a qualquer insumo já visitado. Toque em Editar para corrigir um valor confirmado.</Li>
-            <Li><HL>5. Finalize</HL> — após confirmar todos os insumos, toque em <HL>Finalizar contagem</HL>. A contagem é salva no sistema.</Li>
-            <Li><HL>6. Envie o relatório</HL> — toque em <HL>Enviar relatório para Teresa</HL> para encaminhar o resumo da contagem pelo WhatsApp.</Li>
-            <Tip text="⚠️ A contagem só é registrada no sistema após tocar em Finalizar contagem. Não feche o aplicativo antes disso." color={T.red}/>
+            <Li><HL>5. Finalize</HL> — após confirmar todos os insumos, aparecem dois botões: <HL>Finalizar contagem</HL> (salva no sistema) e <HL>Enviar relatório para Teresa</HL> (abre o WhatsApp com a mensagem já preenchida). Ambos ficam visíveis ao mesmo tempo.</Li>
+            <Li>O relatório enviado contém apenas o nome de cada insumo e a quantidade contabilizada — sem mínimo, máximo ou necessidade de compra. A mensagem solicita que Teresa acesse o sistema para verificar e aprovar a contagem, e informa o que ocorre em caso de aprovação ou reprovação.</Li>
+            <Tip text="A contagem só é registrada no sistema após tocar em Finalizar contagem. Não feche o aplicativo antes disso." color={T.red}/>
           </Acc>
 
           <Acc id="aposenvio" title="O que acontece após o envio?" color={T.accent}>
-            <P>Após finalizar, a contagem aparece no histórico com o status <HL color={T.yellow}>Pendente</HL> até que Teresa a analise.</P>
-            <Li>Se Teresa <HL color={T.green}>aprovar</HL>: os valores contabilizados tornam-se o estoque oficial, o agendamento é concluído e o sistema verifica automaticamente a necessidade de compras.</Li>
-            <Li>Se Teresa <HL color={T.red}>reprovar</HL>: um agendamento de <HL>Recontagem</HL> é criado automaticamente para o mesmo dia com prazo de 48 horas. A recontagem funciona exatamente como uma contagem normal.</Li>
-            <Li>Teresa pode enviar orientações pelo WhatsApp caso a contagem seja reprovada ou necessite de ajustes.</Li>
+            <P>Após finalizar, a contagem aparece no histórico com o status <HL color={T.yellow}>Pendente</HL> até que Teresa a analise no sistema.</P>
+            <Li>Se Teresa <HL color={T.green}>aprovar</HL>: os valores contabilizados tornam-se o estoque oficial, o agendamento é concluído e o sistema gera automaticamente a programação de compras para os insumos que precisam de reposição.</Li>
+            <Li>Se Teresa <HL color={T.red}>reprovar</HL>: um agendamento de <HL>Recontagem</HL> é criado automaticamente para o mesmo dia, com prazo de 48 horas. Teresa deverá sinalizar pelo WhatsApp se a recontagem será necessária para que você possa se programar.</Li>
+            <Li>A recontagem funciona exatamente como uma contagem normal — aparecerá disponível na data agendada.</Li>
           </Acc>
         </div>
       )}
