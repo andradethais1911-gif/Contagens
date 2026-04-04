@@ -1658,27 +1658,83 @@ function EvoTab({items,countings,purchases}) {
 
       {selItem==="all"&&items.length>0&&(()=>{
         const lastVal=[...countings].filter(c=>c.validated).sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0];
+        // Totals
+        const totCad=items.length;
+        const totCont=lastVal?items.reduce((s,i)=>{
+          const ci=(lastVal.items||[]).find(x=>x.id===i.id);
+          return s+(ci?1:0);
+        },0):null;
+        const totDiffQtd=totCont!==null?totCont-totCad:null;
+        const totAcqVal=items.reduce((s,i)=>s+Number(i.value||0)*getTotalAcquired(i),0);
+        const totContVal=lastVal?items.reduce((s,i)=>{
+          const ci=(lastVal.items||[]).find(x=>x.id===i.id);
+          return s+Number(i.value||0)*(ci?.counted??0);
+        },0):null;
+        const totDiffVal=totContVal!==null?totContVal-totAcqVal:null;
+        const diffColor=(d)=>d===null?T.textMuted:d===0?T.green:d>0?T.purple:T.red;
+        const Cel=({label,value,color=T.text})=>(
+          <div style={{background:T.surface,borderRadius:9,padding:"9px 10px"}}>
+            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:3,textTransform:"uppercase",letterSpacing:.3}}>{label}</div>
+            <div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color}}>{value}</div>
+          </div>
+        );
         return(
           <div style={S.card({marginBottom:14,padding:"14px 16px"})}>
             <div style={{fontWeight:700,fontSize:T.fs13,color:T.text,marginBottom:12}}>⚖️ Última contagem — Total adquirido</div>
             {!lastVal&&<div style={{fontSize:T.fs13,color:T.textMuted,textAlign:"center",padding:"20px 0"}}>Nenhuma contagem validada ainda.</div>}
-            {lastVal&&items.map(i=>{
-              const ci=(lastVal.items||[]).find(x=>x.id===i.id);
-              const counted=ci?.counted??0;
-              const acq=getTotalAcquired(i);
-              const diff=counted-acq;
-              const dc=diff===0?T.green:diff>0?T.purple:T.red;
-              return(
-                <div key={i.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${T.border}`}}>
-                  <span style={{fontSize:T.fs12,color:T.text,fontWeight:600}}>{i.name}</span>
-                  <div style={{display:"flex",gap:14,alignItems:"center"}}>
-                    <span style={{fontSize:T.fs11,color:T.textMuted}}>Adquirido: <b style={{color:T.accent,fontFamily:T.fontMono}}>{acq}</b></span>
-                    {ci?<span style={{fontSize:T.fs11,color:T.textMuted}}>Contabilizado: <b style={{color:dc,fontFamily:T.fontMono}}>{counted}</b></span>:<span style={{fontSize:T.fs11,color:T.textMuted}}>Não contabilizado</span>}
-                    {i.value>0&&ci&&<span style={{fontSize:T.fs11,color:dc,fontFamily:T.fontMono,fontWeight:700}}>{diff>0?"+":""}{fmtCur(diff*i.value)}</span>}
+            {lastVal&&(
+              <>
+                {/* Per-item rows */}
+                {items.map(i=>{
+                  const ci=(lastVal.items||[]).find(x=>x.id===i.id);
+                  const counted=ci?.counted??0;
+                  const acq=getTotalAcquired(i);
+                  const dQ=ci?counted-acq:null;
+                  const dV=ci&&i.value>0?dQ*i.value:null;
+                  const dc=diffColor(dQ);
+                  return(
+                    <div key={i.id} style={{padding:"7px 0",borderBottom:`1px solid ${T.border}44`}}>
+                      <div style={{fontWeight:700,fontSize:T.fs12,color:T.text,marginBottom:4}}>{i.name}</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                        <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Insumos cadastrados</div>
+                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.accent}}>1</div>
+                        </div>
+                        <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Insumos contabilizados</div>
+                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:ci?dc:T.textMuted}}>{ci?counted:"—"}</div>
+                        </div>
+                        <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Diferença em quantidade</div>
+                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:dc}}>{dQ===null?"—":dQ>0?`+${dQ}`:String(dQ)}</div>
+                        </div>
+                        <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Valor total adquirido</div>
+                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.accent}}>{i.value>0?fmtCur(i.value*acq):"—"}</div>
+                        </div>
+                        <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Valor total contabilizado</div>
+                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:ci&&i.value>0?dc:T.textMuted}}>{ci&&i.value>0?fmtCur(i.value*counted):"—"}</div>
+                        </div>
+                        <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Diferença em valor</div>
+                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:dV!==null?dc:T.textMuted}}>{dV!==null?(dV>0?`+${fmtCur(dV)}`:fmtCur(dV)):"—"}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Totalization row */}
+                <div style={{marginTop:12,paddingTop:12,borderTop:`2px solid ${T.border}`}}>
+                  <div style={{fontSize:T.fs11,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:8}}>Totalização</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                    <Cel label="Insumos cadastrados"    value={totCad}                                              color={T.accent}/>
+                    <Cel label="Insumos contabilizados" value={totCont!==null?totCont:"—"}                         color={totCont!==null?diffColor(totCont-totCad):T.textMuted}/>
+                    <Cel label="Diferença em quantidade" value={totDiffQtd!==null?(totDiffQtd>0?`+${totDiffQtd}`:String(totDiffQtd)):"—"} color={diffColor(totDiffQtd)}/>
                   </div>
                 </div>
-              );
-            })}
+              </>
+            )}
           </div>
         );
       })()}
@@ -1687,42 +1743,43 @@ function EvoTab({items,countings,purchases}) {
         <>
           {/* Summary card: total adquirido vs última contagem */}
           <div style={{...S.card({marginBottom:14,padding:"14px 16px",border:`1px solid ${T.border}`})}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontSize:T.fs12,fontWeight:700,color:T.text}}>⚖️ Última contagem — Total adquirido</div>
-            {si.value>0&&<div style={{fontSize:T.fs11,color:T.textMuted}}>Valor unitário: <b style={{color:T.yellow}}>{fmtCur(si.value)}</b></div>}
-          </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
-              <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
-                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>Total adquirido</div>
-                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.accent}}>{totalAcquired}</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:T.fs12,fontWeight:700,color:T.text}}>⚖️ Última contagem — Total adquirido</div>
+              {si.value>0&&<div style={{fontSize:T.fs11,color:T.textMuted}}>Valor unitário: <b style={{color:T.yellow}}>{fmtCur(si.value)}</b></div>}
+            </div>
+            {/* Row 1: quantities */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+              <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Insumos cadastrados</div>
+                <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.accent}}>1</div>
                 <div style={{fontSize:T.fs10,color:T.textMuted}}>{si.unit}</div>
               </div>
-              <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
-                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>Última contagem</div>
+              <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Insumos contabilizados</div>
                 <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:diff===null?T.textSub:lastCountedQty<totalAcquired?T.red:lastCountedQty===totalAcquired?T.green:T.purple}}>{lastCounting?lastCountedQty:"—"}</div>
                 <div style={{fontSize:T.fs10,color:T.textMuted}}>{lastCounting?fmtDate(lastCounting.date):"Sem contagem"}</div>
               </div>
-              <div style={{background:T.surface,borderRadius:9,padding:"10px 10px"}}>
-                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4}}>Diferença</div>
+              <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
+                <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Diferença em quantidade</div>
                 <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:diff===null?T.textSub:diff===0?T.green:diff>0?T.purple:T.red}}>
                   {diff===null?"—":diff>0?`+${diff}`:String(diff)}
                 </div>
-                <div style={{fontSize:T.fs10,color:diff===null?T.textMuted:diff===0?T.green:diff>0?T.purple:T.red}}>{diff===null?"":diff===0?"Igual ao adquirido":diff>0?"Acima do adquirido":"Abaixo do adquirido"}</div>
               </div>
             </div>
+            {/* Row 2: values — only if has unit value */}
             {si.value>0&&(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
-                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:2}}>Valor adquirido</div>
-                  <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:T.accent}}>{fmtCur(Number(si.value)*totalAcquired)}</div>
+                <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
+                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Valor total adquirido</div>
+                  <div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color:T.accent}}>{fmtCur(Number(si.value)*totalAcquired)}</div>
                 </div>
-                <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
-                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:2}}>Valor contabilizado</div>
-                  <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:diff===null?T.textSub:lastCountedQty<totalAcquired?T.red:lastCountedQty===totalAcquired?T.green:T.purple}}>{lastCounting?fmtCur(Number(si.value)*lastCountedQty):"—"}</div>
+                <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
+                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Valor total contabilizado</div>
+                  <div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color:diff===null?T.textSub:lastCountedQty<totalAcquired?T.red:lastCountedQty===totalAcquired?T.green:T.purple}}>{lastCounting?fmtCur(Number(si.value)*lastCountedQty):"—"}</div>
                 </div>
-                <div style={{background:T.surface,borderRadius:9,padding:"8px 10px"}}>
-                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:2}}>Diferença em valor</div>
-                  <div style={{fontFamily:T.fontMono,fontSize:T.fs12,fontWeight:700,color:diff===null?T.textSub:diff===0?T.green:diff>0?T.purple:T.red}}>{diff===null?"—":fmtCur(Number(si.value)*diff)}</div>
+                <div style={{background:T.surface,borderRadius:9,padding:"10px"}}>
+                  <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:.3}}>Diferença em valor</div>
+                  <div style={{fontFamily:T.fontMono,fontSize:T.fs14,fontWeight:700,color:diff===null?T.textSub:diff===0?T.green:diff>0?T.purple:T.red}}>{diff===null?"—":fmtCur(Number(si.value)*diff)}</div>
                 </div>
               </div>
             )}
