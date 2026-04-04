@@ -429,41 +429,29 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
     </div>
   );
 
-  // Blocked
-  if(isBlocked) return (
-    <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:T.fontBase}}>
-      <div style={{width:"100%",maxWidth:380}}>
-        <button onClick={onBack} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs13,marginBottom:20,padding:0}}>← Voltar</button>
-        <div style={{textAlign:"center",marginBottom:24}}>
-          <div style={{fontSize:52,marginBottom:12}}>🔒</div>
-          <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.red,marginBottom:8}}>CONTAGEM BLOQUEADA</div>
-          <div style={{fontSize:T.fs13,color:T.textMuted,lineHeight:1.7}}>Não há contagem agendada para hoje. Somente é possível realizar contagem nas datas agendadas.</div>
-        </div>
-        {nextFuture&&(
-          <div style={{...S.card({marginBottom:16,background:T.yellow+"0a",border:`1px solid ${T.border}`,padding:"16px"})}}>
-            <div style={{fontSize:T.fs11,fontWeight:700,color:T.yellow,marginBottom:6,textTransform:"uppercase"}}>📅 Próxima contagem agendada</div>
-            <div style={{fontWeight:700,fontSize:T.fs15,color:T.text,marginBottom:4}}>{nextFuture.label}</div>
-            <div style={{fontSize:T.fs13,color:T.yellow}}>{fmtDate(nextFuture.date)} · {(()=>{const d=daysUntil(nextFuture.date);return d===1?"em 1 dia":`em ${d} dias`;})()}</div>
+  // Done screen — must come BEFORE isBlocked check
+  if(phase==="done") return (
+    <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:0,fontFamily:T.fontBase,padding:24}}>
+      <div style={{width:72,height:72,background:`linear-gradient(135deg,${T.green},${T.greenDim})`,borderRadius:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,marginBottom:16}}>✅</div>
+      <div style={{fontFamily:T.fontMono,fontSize:T.fs20,color:T.green,textAlign:"center",marginBottom:6}}>CONTAGEM FINALIZADA!</div>
+      <div style={{fontSize:T.fs13,color:T.textMuted,textAlign:"center",marginBottom:24}}>Contagem salva. Agora envie o relatório para Teresa.</div>
+      <div style={{width:"100%",maxWidth:340,display:"flex",flexDirection:"column",gap:12}}>
+        {whatsapp&&savedCounting?(
+          <a
+            href={`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(buildWAMsg(savedCounting,items))}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{display:"block",width:"100%",background:T.green,color:"#fff",fontWeight:700,fontSize:T.fs14,padding:"14px",borderRadius:10,textAlign:"center",textDecoration:"none",boxSizing:"border-box",fontFamily:T.fontBase}}
+          >
+            Enviar relatório para Teresa
+          </a>
+        ):(
+          <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:"14px",textAlign:"center"}}>
+            <div style={{fontSize:T.fs13,color:T.textMuted,marginBottom:4}}>Enviar relatório para Teresa</div>
+            <div style={{fontSize:T.fs11,color:T.textMuted}}>Configure o WhatsApp na Aba Segurança para habilitar este botão.</div>
           </div>
         )}
-        {whatsapp&&(
-          <div style={{...S.card({marginBottom:12,background:T.green+"08",border:`1px solid ${T.border}`,padding:"16px"})}}>
-            <div style={{fontSize:T.fs12,color:T.green,fontWeight:700,marginBottom:6}}>📲 Avisar o gerente</div>
-            <div style={{fontSize:T.fs12,color:T.textMuted,marginBottom:10,lineHeight:1.6}}>Se você foi orientado a fazer a contagem hoje e o sistema está bloqueado, envie uma mensagem ao gerente explicando a situação.</div>
-            {(()=>{
-              const proximaInfo = nextFuture ? ` A próxima prevista é "${nextFuture.label}" em ${fmtDate(nextFuture.date)}.` : " Nenhuma contagem futura cadastrada.";
-              const destinoInfo = nextFuture ? ` referente a *"${nextFuture.label}"* (prevista para ${fmtDate(nextFuture.date)})` : "";
-              const msg=`Olá, Teresa!\n\nEstou tentando realizar a contagem de estoque${destinoInfo}, mas o sistema não está permitindo o registro.\n\n⚠️ *Motivo:* Não há contagem agendada para hoje (${fmtDate(todayStr())}).${proximaInfo}\n\n_Sistema de Gestão de Contagens_`;
-              return(
-                <a href={`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer"
-                  style={{display:"block",background:T.green,color:"#fff",fontWeight:700,fontSize:T.fs13,padding:"11px",borderRadius:10,textAlign:"center",textDecoration:"none",fontFamily:T.fontBase}}>
-                  📲 Enviar mensagem para Teresa
-                </a>
-              );
-            })()}
-          </div>
-        )}
-        <button onClick={onBack} style={{...S.btn(T.surface,true),border:`1px solid ${T.border}`,color:T.textSub,marginTop:4}}>← Voltar ao início</button>
+        <button onClick={onBack} style={{...S.btn(T.surface,true),border:`1px solid ${T.border}`,color:T.textSub}}>← Voltar ao início</button>
       </div>
     </div>
   );
@@ -567,31 +555,46 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
     );
   }
 
-  return (
-    <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:0,fontFamily:T.fontBase,padding:24}}>
-      <div style={{width:72,height:72,background:`linear-gradient(135deg,${T.green},${T.greenDim})`,borderRadius:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,marginBottom:16}}>✅</div>
-      <div style={{fontFamily:T.fontMono,fontSize:T.fs20,color:T.green,textAlign:"center",marginBottom:6}}>CONTAGEM FINALIZADA!</div>
-      <div style={{fontSize:T.fs13,color:T.textMuted,textAlign:"center",marginBottom:24}}>Contagem salva. Agora envie o relatório para Teresa.</div>
-      <div style={{width:"100%",maxWidth:340,display:"flex",flexDirection:"column",gap:12}}>
-        {whatsapp&&savedCounting?(
-          <a
-            href={`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(buildWAMsg(savedCounting,items))}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{display:"block",width:"100%",background:T.green,color:"#fff",fontWeight:700,fontSize:T.fs14,padding:"14px",borderRadius:10,textAlign:"center",textDecoration:"none",boxSizing:"border-box",fontFamily:T.fontBase}}
-          >
-            Enviar relatório para Teresa
-          </a>
-        ):(
-          <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:"14px",textAlign:"center"}}>
-            <div style={{fontSize:T.fs13,color:T.textMuted,marginBottom:4}}>Enviar relatório para Teresa</div>
-            <div style={{fontSize:T.fs11,color:T.textMuted}}>Configure o WhatsApp na Aba Segurança para habilitar este botão.</div>
+  // Blocked — last resort, only if no phase matches
+  if(isBlocked) return (
+    <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:T.fontBase}}>
+      <div style={{width:"100%",maxWidth:380}}>
+        <button onClick={onBack} style={{background:"none",border:"none",color:T.textMuted,cursor:"pointer",fontSize:T.fs13,marginBottom:20,padding:0}}>← Voltar</button>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{fontSize:52,marginBottom:12}}>🔒</div>
+          <div style={{fontFamily:T.fontMono,fontSize:T.fs18,fontWeight:700,color:T.red,marginBottom:8}}>CONTAGEM BLOQUEADA</div>
+          <div style={{fontSize:T.fs13,color:T.textMuted,lineHeight:1.7}}>Não há contagem agendada para hoje. Somente é possível realizar contagem nas datas agendadas.</div>
+        </div>
+        {nextFuture&&(
+          <div style={{...S.card({marginBottom:16,background:T.yellow+"0a",border:`1px solid ${T.border}`,padding:"16px"})}}>
+            <div style={{fontSize:T.fs11,fontWeight:700,color:T.yellow,marginBottom:6,textTransform:"uppercase"}}>📅 Próxima contagem agendada</div>
+            <div style={{fontWeight:700,fontSize:T.fs15,color:T.text,marginBottom:4}}>{nextFuture.label}</div>
+            <div style={{fontSize:T.fs13,color:T.yellow}}>{fmtDate(nextFuture.date)} · {(()=>{const d=daysUntil(nextFuture.date);return d===1?"em 1 dia":`em ${d} dias`;})()}</div>
           </div>
         )}
-        <button onClick={onBack} style={{...S.btn(T.surface,true),border:`1px solid ${T.border}`,color:T.textSub}}>← Voltar ao início</button>
+        {whatsapp&&(
+          <div style={{...S.card({marginBottom:12,background:T.green+"08",border:`1px solid ${T.border}`,padding:"16px"})}}>
+            <div style={{fontSize:T.fs12,color:T.green,fontWeight:700,marginBottom:6}}>📲 Avisar o gerente</div>
+            <div style={{fontSize:T.fs12,color:T.textMuted,marginBottom:10,lineHeight:1.6}}>Se você foi orientado a fazer a contagem hoje e o sistema está bloqueado, envie uma mensagem ao gerente explicando a situação.</div>
+            {(()=>{
+              const proximaInfo = nextFuture ? ` A próxima prevista é "${nextFuture.label}" em ${fmtDate(nextFuture.date)}.` : " Nenhuma contagem futura cadastrada.";
+              const destinoInfo = nextFuture ? ` referente a *"${nextFuture.label}"* (prevista para ${fmtDate(nextFuture.date)})` : "";
+              const msg=`Olá, Teresa!\n\nEstou tentando realizar a contagem de estoque${destinoInfo}, mas o sistema não está permitindo o registro.\n\n⚠️ *Motivo:* Não há contagem agendada para hoje (${fmtDate(todayStr())}).${proximaInfo}\n\n_Sistema de Gestão de Contagens_`;
+              return(
+                <a href={`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer"
+                  style={{display:"block",background:T.green,color:"#fff",fontWeight:700,fontSize:T.fs13,padding:"11px",borderRadius:10,textAlign:"center",textDecoration:"none",fontFamily:T.fontBase}}>
+                  📲 Enviar mensagem para Teresa
+                </a>
+              );
+            })()}
+          </div>
+        )}
+        <button onClick={onBack} style={{...S.btn(T.surface,true),border:`1px solid ${T.border}`,color:T.textSub,marginTop:4}}>← Voltar ao início</button>
       </div>
     </div>
   );
+
+  return null;
 }
 
 // ─── MANAGER PANEL ───────────────────────────────────────────────────────────
@@ -1827,65 +1830,60 @@ function EvoTab({items,countings,purchases}) {
         return(
           <div style={S.card({marginBottom:14,padding:"14px 16px"})}>
             <div style={{fontWeight:700,fontSize:T.fs13,color:T.text,marginBottom:12}}>⚖️ Última contagem — Total adquirido</div>
-            {!lastVal&&<div style={{fontSize:T.fs13,color:T.textMuted,textAlign:"center",padding:"20px 0"}}>Nenhuma contagem validada ainda.</div>}
-            {lastVal&&(
-              <>
-                {/* Per-item rows */}
-                {items.map(i=>{
-                  const ci=(lastVal.items||[]).find(x=>x.id===i.id);
-                  const counted=ci?.counted??0;
-                  const acq=getTotalAcquired(i);
-                  const dQ=ci?counted-acq:null;
-                  const dV=ci&&i.value>0?dQ*i.value:null;
-                  const dc=diffColor(dQ);
-                  return(
-                    <div key={i.id} style={{padding:"7px 0",borderBottom:`1px solid ${T.border}44`}}>
-                      <div style={{fontWeight:700,fontSize:T.fs12,color:T.text,marginBottom:4}}>{i.name}</div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-                        <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
-                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Quantidade total adquirida</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.accent}}>{acq}</div>
-                        </div>
-                        <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
-                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Quantidade total contabilizada</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:ci?dc:T.textMuted}}>{ci?counted:"—"}</div>
-                        </div>
-                        <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
-                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Diferença em quantidade</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:dc}}>{dQ===null?"—":dQ>0?`+${dQ}`:String(dQ)}</div>
-                        </div>
-                        <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
-                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Valor total adquirido</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.accent}}>{i.value>0?fmtCur(i.value*acq):"—"}</div>
-                        </div>
-                        <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
-                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Valor total contabilizado</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:ci&&i.value>0?dc:T.textMuted}}>{ci&&i.value>0?fmtCur(i.value*counted):"—"}</div>
-                        </div>
-                        <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
-                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Diferença em valor</div>
-                          <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:dV!==null?dc:T.textMuted}}>{dV!==null?(dV>0?`+${fmtCur(dV)}`:fmtCur(dV)):"—"}</div>
-                        </div>
-                      </div>
+            {/* Per-item rows — always shown */}
+            {items.map(i=>{
+              const ci=lastVal?(lastVal.items||[]).find(x=>x.id===i.id):null;
+              const counted=ci?.counted??0;
+              const acq=getTotalAcquired(i);
+              const dQ=ci?counted-acq:null;
+              const dV=ci&&i.value>0?dQ*i.value:null;
+              const dc=diffColor(dQ);
+              return(
+                <div key={i.id} style={{padding:"7px 0",borderBottom:`1px solid ${T.border}44`}}>
+                  <div style={{fontWeight:700,fontSize:T.fs12,color:T.text,marginBottom:4}}>{i.name}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                    <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
+                      <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Quantidade total adquirida</div>
+                      <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.accent}}>{acq}</div>
                     </div>
-                  );
-                })}
-                {/* Totalization row */}
-                <div style={{marginTop:12,paddingTop:12,borderTop:`2px solid ${T.border}`}}>
-                  <div style={{fontSize:T.fs11,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:8}}>Totalização</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:6}}>
-                    <Cel label="Quantidade total adquirida"     value={totCad}                                                                    color={T.accent}/>
-                    <Cel label="Quantidade total contabilizada" value={totCont!==null?totCont:"—"}                                                color={totCont!==null?diffColor(totCont-totCad):T.textMuted}/>
-                    <Cel label="Diferença em quantidade"        value={totDiffQtd!==null?(totDiffQtd>0?`+${totDiffQtd}`:String(totDiffQtd)):"—"} color={diffColor(totDiffQtd)}/>
+                    <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
+                      <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Quantidade total contabilizada</div>
+                      <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:ci?dc:T.textMuted}}>{ci?counted:"—"}</div>
+                    </div>
+                    <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
+                      <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Diferença em quantidade</div>
+                      <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:dc}}>{dQ===null?"—":dQ>0?`+${dQ}`:String(dQ)}</div>
+                    </div>
+                    <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
+                      <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Valor total adquirido</div>
+                      <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:T.accent}}>{i.value>0?fmtCur(i.value*acq):"—"}</div>
+                    </div>
+                    <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
+                      <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Valor total contabilizado</div>
+                      <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:ci&&i.value>0?dc:T.textMuted}}>{ci&&i.value>0?fmtCur(i.value*counted):"—"}</div>
+                    </div>
+                    <div style={{background:T.surface,borderRadius:7,padding:"6px 8px"}}>
+                      <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>Diferença em valor</div>
+                      <div style={{fontFamily:T.fontMono,fontSize:T.fs13,fontWeight:700,color:dV!==null?dc:T.textMuted}}>{dV!==null?(dV>0?`+${fmtCur(dV)}`:fmtCur(dV)):"—"}</div>
+                    </div>
                   </div>
-                  {totAcqVal>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-                    <Cel label="Valor total adquirido"     value={fmtCur(totAcqVal)}                                                                   color={T.accent}/>
-                    <Cel label="Valor total contabilizado" value={totContVal!==null?fmtCur(totContVal):"—"}                                            color={totContVal!==null?diffColor(totContVal-totAcqVal):T.textMuted}/>
-                    <Cel label="Diferença em valor"        value={totDiffVal!==null?(totDiffVal>0?`+${fmtCur(totDiffVal)}`:fmtCur(totDiffVal)):"—"}    color={diffColor(totDiffVal)}/>
-                  </div>}
                 </div>
-              </>
-            )}
+              );
+            })}
+            {/* Totalization — always shown */}
+            <div style={{marginTop:12,paddingTop:12,borderTop:`2px solid ${T.border}`}}>
+              <div style={{fontSize:T.fs11,color:T.textMuted,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:8}}>Totalização</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:6}}>
+                <Cel label="Quantidade total adquirida"     value={totCad}                                                                    color={T.accent}/>
+                <Cel label="Quantidade total contabilizada" value={totCont!==null?totCont:"—"}                                                color={totCont!==null?diffColor(totCont-totCad):T.textMuted}/>
+                <Cel label="Diferença em quantidade"        value={totDiffQtd!==null?(totDiffQtd>0?`+${totDiffQtd}`:String(totDiffQtd)):"—"} color={diffColor(totDiffQtd)}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                <Cel label="Valor total adquirido"     value={totAcqVal>0?fmtCur(totAcqVal):"—"}                                                             color={totAcqVal>0?T.accent:T.textMuted}/>
+                <Cel label="Valor total contabilizado" value={totContVal!==null&&totContVal>0?fmtCur(totContVal):"—"}                                         color={totContVal!==null&&totContVal>0?diffColor(totContVal-totAcqVal):T.textMuted}/>
+                <Cel label="Diferença em valor"        value={totDiffVal!==null?(totDiffVal>0?`+${fmtCur(totDiffVal)}`:fmtCur(totDiffVal)):"—"}               color={diffColor(totDiffVal)}/>
+              </div>
+            </div>
           </div>
         );
       })()}
