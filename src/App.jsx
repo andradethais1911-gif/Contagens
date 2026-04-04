@@ -703,15 +703,20 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
       const labelR=(R+r)/2;
       const lx=cx+labelR*Math.cos(midA),ly=cy+labelR*Math.sin(midA);
       // Only show % if slice is big enough — font size matches card value (T.fs16)
-      const pctLabel=pct>0.10?`${Math.round(pct*100)}%`:null;
       return(
         <g key={i}>
           <path d={pct>=1?`M${cx},${cy-R} A${R},${R} 0 1,1 ${cx-0.001},${cy-R} L${cx},${cy-r} A${r},${r} 0 1,0 ${cx+0.001},${cy-r} Z`:d} fill={sl.color}/>
-          {pctLabel&&<text x={lx} y={ly+6} textAnchor="middle" dominantBaseline="middle" fontSize={T.fs16} fontWeight="700" fill="#fff" fontFamily={T.fontMono}>{pctLabel}</text>}
         </g>
       );
     });
-    return <svg width={size} height={size}>{paths}</svg>;
+    // Single % label in center — first colored slice (index 0) percentage
+    const mainPct=active.length>0?Math.round((active[0].value/total)*100):null;
+    return(
+      <svg width={size} height={size}>
+        {paths}
+        {mainPct!==null&&<text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize={T.fs16} fontWeight="700" fill="#fff" fontFamily={T.fontMono}>{mainPct}%</text>}
+      </svg>
+    );
   };
 
   return (
@@ -802,14 +807,14 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
       {/* LINHA 1 */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
         <Card icon="📦" label="INSUMOS CADASTRADOS"     value={items.length===0?"—":items.length}        color={items.length===0?T.textMuted:T.accent}            onClick={()=>onNavigate(1)}/>
-        <Card icon="🧮" label="INSUMOS CONTABILIZADOS"  value={lastC?ex:"—"} sub={lastC?lastC.label:null} color={lastC?colorContabilizados:T.textMuted} onClick={()=>onNavigate(2)}/>
+        <Card icon="🧮" label="INSUMOS CONTABILIZADOS"  value={lastC?ex:"—"} color={lastC?colorContabilizados:T.textMuted} onClick={()=>onNavigate(2)}/>
         <Card icon="🔢" label="DIFERENÇA EM QUANTIDADE" value={lastC?`${dQ>0?"+":""}${dQ}`:"—"} color={lastC?colorDiffQtd:T.textMuted} onClick={()=>onNavigate(2,"evolution")}/>
       </div>
 
       {/* LINHA 2 */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
         <Card icon="💳" label="VALOR TOTAL ADQUIRIDO"     value={vA===0?"—":fmtCur(vA)}            color={vA===0?T.textMuted:T.accent}           onClick={()=>onNavigate(3,"history")}/>
-        <Card icon="💰" label="VALOR TOTAL CONTABILIZADO" value={lastC&&vC>0?fmtCur(vC):"—"} sub={lastC?lastC.label:null} color={lastC&&vC>0?colorVContabilizado:T.textMuted} onClick={()=>onNavigate(2)}/>
+        <Card icon="💰" label="VALOR TOTAL CONTABILIZADO" value={lastC&&vC>0?fmtCur(vC):"—"} color={lastC&&vC>0?colorVContabilizado:T.textMuted} onClick={()=>onNavigate(2)}/>
         <Card icon="💹" label="DIFERENÇA EM VALOR"        value={lastC?fmtCur(dV):"—"}  color={lastC?colorDiffVal:T.textMuted}       onClick={()=>onNavigate(2,"evolution")}/>
       </div>
 
@@ -818,9 +823,9 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
         <div style={{marginBottom:8}}>
           <div style={{fontSize:T.fs10,color:T.textSub,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Status das quantidades</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-            <Card icon="⬇️" label="ITENS ABAIXO DO MÍNIMO" value={abMin}   sub={lastC?lastC.label:null} color={abMin>0?T.red:T.green}    onClick={()=>onNavigate(1)}/>
-            <Card icon="✅" label="ITENS DENTRO DA MARGEM"  value={inRange} sub={lastC?lastC.label:null} color={inRange===items.length?T.green:inRange>0?T.green:T.red} onClick={()=>onNavigate(1)}/>
-            <Card icon="⬆️" label="ITENS ACIMA DO MÁXIMO"   value={acMax}   sub={lastC?lastC.label:null} color={acMax===0?T.green:T.purple} onClick={()=>onNavigate(1)}/>
+            <Card icon="⬇️" label="ITENS ABAIXO DO MÍNIMO" value={abMin}   color={abMin>0?T.red:T.green}    onClick={()=>onNavigate(1)}/>
+            <Card icon="✅" label="ITENS DENTRO DA MARGEM"  value={inRange} color={inRange===items.length?T.green:inRange>0?T.green:T.red} onClick={()=>onNavigate(1)}/>
+            <Card icon="⬆️" label="ITENS ACIMA DO MÁXIMO"   value={acMax}   color={acMax===0?T.green:T.purple} onClick={()=>onNavigate(1)}/>
           </div>
         </div>
       )}
@@ -833,7 +838,6 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
             icon="📋"
             label="CONTAGENS REGISTRADAS"
             value={sortedCountings.length===0?"—":sortedCountings.length}
-            sub={lastC?`Última: ${fmtDate(lastC.date)}`:null}
             color={sortedCountings.length>0?T.accent:T.textMuted}
             onClick={()=>onNavigate(2,"history")}
           />
@@ -841,7 +845,6 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
             icon="✅"
             label="CONTAGENS VALIDADAS"
             value={sortedCountings.length===0?"—":countingsValidated}
-            sub={countingsValidated>0&&lastC?`Última: ${fmtDate(lastC.date)}`:null}
             color={sortedCountings.length===0?T.textMuted:lastC?(countingsValidated===sortedCountings.length?T.green:T.red):T.textMuted}
             onClick={()=>onNavigate(2,"history")}
           />
@@ -849,7 +852,6 @@ function DashTab({items,countings,scheduledDates,onNavigate}) {
             icon="⏳"
             label="CONTAGENS PENDENTES"
             value={sortedCountings.length===0?"—":countingsPendingVal}
-            sub={countingsPendingVal>0?"Aguardando validação":null}
             color={sortedCountings.length===0?T.textMuted:colorPendingVal}
             onClick={()=>onNavigate(2,"schedule")}
           />
@@ -893,18 +895,10 @@ function ItemsTab({items,setItems,countings}) {
   const [form,setForm]=useState(empty); const [edit,setEdit]=useState(null); const [err,setErr]=useState("");
   const [showForm,setShowForm]=useState(false); const [confirm,setConfirm]=useState(null);
   const [search,setSearch]=useState("");
-  const [selIds,setSelIds]=useState(()=>new Set());
-  const [allSel,setAllSel]=useState(true);
   const fileRef=useRef();
   const lastC=countings.length?[...countings].sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0]:null;
   const lc={};if(lastC)(lastC.items||[]).forEach(ci=>{lc[ci.id]=ci.counted;});
   const filtered=items.filter(it=>!search||it.name.toLowerCase().includes(search.toLowerCase()));
-  const effectiveSel=allSel?new Set(filtered.map(i=>i.id)):selIds;
-  const selItems=filtered.filter(i=>effectiveSel.has(i.id));
-  const totalAcqSel=selItems.reduce((s,i)=>s+Number(i.value||0)*getTotalAcquired(i),0);
-  const totalContSel=selItems.reduce((s,i)=>s+Number(i.value||0)*(lc[i.id]??0),0);
-  const toggleSel=(id)=>{if(allSel){const s=new Set(filtered.map(i=>i.id));s.delete(id);setSelIds(s);setAllSel(false);}else{const s=new Set(selIds);s.has(id)?s.delete(id):s.add(id);setSelIds(s);}};
-  const toggleAll=()=>{if(allSel){setSelIds(new Set());setAllSel(false);}else{setAllSel(true);setSelIds(new Set());}};
 
   const handleFile=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>setForm(p=>({...p,attachment:ev.target.result,attachmentName:f.name}));r.readAsDataURL(f);};
   const save=()=>{
@@ -923,23 +917,7 @@ function ItemsTab({items,setItems,countings}) {
         <div style={{...S.sec,marginBottom:0}}>Insumos <span style={{color:T.textMuted,fontWeight:400}}>({items.length})</span></div>
         <button onClick={()=>{setEdit(null);setForm(empty);setShowForm(p=>!p);}} style={S.btn(showForm?T.textMuted:T.green,false,true)}>{showForm?"✕ Fechar":"+ Novo"}</button>
       </div>
-      {/* Search bar */}
       <input placeholder="🔍 Pesquisar insumo..." value={search} onChange={e=>setSearch(e.target.value)} style={{...S.input({marginBottom:10})}}/>
-      {/* Selection summary */}
-      {items.length>0&&(
-        <div style={{...S.card({marginBottom:12,padding:"10px 14px",background:T.surface}),display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div onClick={toggleAll} style={{width:18,height:18,borderRadius:4,border:`2px solid ${allSel?T.green:T.textMuted}`,background:allSel?T.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
-              {allSel&&<span style={{color:"#fff",fontSize:10,fontWeight:900}}>✓</span>}
-            </div>
-            <span style={{fontSize:T.fs11,color:T.textMuted,fontWeight:600}}>{allSel?filtered.length:selItems.length} selecionado{(allSel?filtered.length:selItems.length)!==1?"s":""}</span>
-          </div>
-          <div style={{textAlign:"right"}}>
-            <div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:600}}>Adquirido: <span style={{color:T.accent,fontFamily:T.fontMono}}>{fmtCur(totalAcqSel)}</span></div>
-            {lastC&&<div style={{fontSize:T.fs10,color:T.textMuted,fontWeight:600}}>Contabilizado: <span style={{fontFamily:T.fontMono,color:totalContSel<totalAcqSel?T.red:totalContSel===totalAcqSel?T.green:T.purple}}>{fmtCur(totalContSel)}</span></div>}
-          </div>
-        </div>
-      )}
       {showForm&&(
         <div style={{...S.card({marginBottom:16,border:`1px solid ${T.border}`,padding:"18px"})}}>
           <div style={{fontWeight:700,marginBottom:14,color:T.green,fontSize:T.fs14}}>{edit!==null?"Editar insumo":"Novo insumo"}</div>
@@ -1008,9 +986,6 @@ function ItemsTab({items,setItems,countings}) {
                 {it.attachmentName&&!it.attachment?.startsWith("data:image")&&<div style={{fontSize:T.fs11,color:T.purple,marginTop:4}}>📎 {it.attachmentName}</div>}
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0,alignSelf:"flex-start"}}>
-                <div onClick={()=>toggleSel(it.id)} style={{width:18,height:18,borderRadius:4,border:`2px solid ${effectiveSel.has(it.id)?T.green:T.textMuted}`,background:effectiveSel.has(it.id)?T.green:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",marginBottom:2}}>
-                  {effectiveSel.has(it.id)&&<span style={{color:"#fff",fontSize:10,fontWeight:900}}>✓</span>}
-                </div>
                 <button onClick={()=>startEdit(it)} style={{...S.btn(T.accent,false,true)}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                 <button onClick={()=>setConfirm({id:it.id,name:it.name})} style={{...S.btn(T.red,false,true)}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
               </div>
@@ -1630,10 +1605,9 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
 
 // ─── EVOLUTION TAB ───────────────────────────────────────────────────────────
 function EvoTab({items,countings,purchases}) {
-  const firstId = items.length>0?String(items[0].id):"";
-  const [selItem,setSelItem]=useState(firstId);
+  const [selItem,setSelItem]=useState("all");
   const [expandPurch,setExpandPurch]=useState({});
-  const si = items.find(i=>i.id===Number(selItem))||null;
+  const si = selItem==="all"?null:items.find(i=>i.id===Number(selItem))||null;
 
   // For single item: grouped purchase row + validated countings
   const getSeries = () => {
@@ -1651,10 +1625,12 @@ function EvoTab({items,countings,purchases}) {
     ];
     const purchRow=totalPurch>0?[{qty:totalPurch,label:"Total adquirido",purchGroups,type:"purchase"}]:[];
     const sortedC=[...countings].filter(c=>c.validated&&!c.rejected).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
-    const countRows=sortedC.map(c=>{
-      const ci=(c.items||[]).find(i=>i.id===si.id);
-      return{qty:ci?.counted??0,label:c.label,date:c.date,type:"counting"};
-    });
+    const countRows=sortedC
+      .filter(c=>(c.items||[]).some(ci=>ci.id===si.id)) // only countings that actually included this item
+      .map(c=>{
+        const ci=(c.items||[]).find(i=>i.id===si.id);
+        return{qty:ci?.counted??0,label:c.label,date:c.date,type:"counting"};
+      });
     return [...purchRow,...countRows];
   };
 
@@ -1672,12 +1648,40 @@ function EvoTab({items,countings,purchases}) {
         {items.length===0
           ? <div style={{fontSize:T.fs13,color:T.textMuted}}>Nenhum insumo cadastrado.</div>
           : <select value={selItem} onChange={e=>setSelItem(e.target.value)} style={S.input()}>
+              <option value="all">TODOS</option>
               {items.map(i=><option key={i.id} value={String(i.id)}>{i.name}</option>)}
             </select>
         }
       </div>
 
 
+
+      {selItem==="all"&&items.length>0&&(()=>{
+        const lastVal=[...countings].filter(c=>c.validated).sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0];
+        return(
+          <div style={S.card({marginBottom:14,padding:"14px 16px"})}>
+            <div style={{fontWeight:700,fontSize:T.fs13,color:T.text,marginBottom:12}}>⚖️ Última contagem — Total adquirido</div>
+            {!lastVal&&<div style={{fontSize:T.fs13,color:T.textMuted,textAlign:"center",padding:"20px 0"}}>Nenhuma contagem validada ainda.</div>}
+            {lastVal&&items.map(i=>{
+              const ci=(lastVal.items||[]).find(x=>x.id===i.id);
+              const counted=ci?.counted??0;
+              const acq=getTotalAcquired(i);
+              const diff=counted-acq;
+              const dc=diff===0?T.green:diff>0?T.purple:T.red;
+              return(
+                <div key={i.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${T.border}`}}>
+                  <span style={{fontSize:T.fs12,color:T.text,fontWeight:600}}>{i.name}</span>
+                  <div style={{display:"flex",gap:14,alignItems:"center"}}>
+                    <span style={{fontSize:T.fs11,color:T.textMuted}}>Adquirido: <b style={{color:T.accent,fontFamily:T.fontMono}}>{acq}</b></span>
+                    {ci?<span style={{fontSize:T.fs11,color:T.textMuted}}>Contabilizado: <b style={{color:dc,fontFamily:T.fontMono}}>{counted}</b></span>:<span style={{fontSize:T.fs11,color:T.textMuted}}>Não contabilizado</span>}
+                    {i.value>0&&ci&&<span style={{fontSize:T.fs11,color:dc,fontFamily:T.fontMono,fontWeight:700}}>{diff>0?"+":""}{fmtCur(diff*i.value)}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {si&&(
         <>
@@ -1923,75 +1927,75 @@ function InstructionsTab() {
       {sub==="gerente"&&(
         <div>
           <Acc id="dashboard" title="📊 Aba Dashboard" color={T.warm}>
-            <P>Visão geral do estoque em tempo real. Todos os cards são clicáveis e levam diretamente à tela correspondente. Quando não há dados, os cards exibem —.</P>
-            <Li><HL>Linha 1 — Insumos:</HL> mostra insumos cadastrados, insumos contabilizados (baseado na última contagem) e a diferença entre os dois.</Li>
-            <Li><HL>Linha 2 — Valores:</HL> mostra o valor total adquirido (compras registradas), o valor total contabilizado (última contagem × valor unitário) e a diferença.</Li>
-            <Li><HL>Status das quantidades:</HL> exibido após a primeira contagem. Mostra quantos itens estão abaixo do mínimo, dentro da margem ou acima do máximo.</Li>
-            <Li><HL>Status das contagens:</HL> total de contagens registradas, validadas e pendentes de validação.</Li>
-            <Li>Alternando para <HL>Gráficos</HL>, três donuts mostram visualmente: % de insumos contabilizados, % do valor contabilizado e % de contagens validadas.</Li>
-            <Li><HL color={T.red}>Vermelho</HL> — abaixo do esperado. <HL color={T.green}>Verde</HL> — igual ao esperado. <HL color={T.purple}>Roxo</HL> — acima do esperado.</Li>
+            <P>Painel de controle geral do estoque. Todos os cards são clicáveis e levam diretamente à tela correspondente. Enquanto não houver dados, os cards exibem —.</P>
+            <Li><HL>Linha 1 — Insumos:</HL> quantidade de insumos cadastrados, quantidade contabilizada na última contagem e a diferença entre os dois valores.</Li>
+            <Li><HL>Linha 2 — Valores:</HL> valor total adquirido (soma de todas as compras registradas), valor total contabilizado (quantidade da última contagem × valor unitário de cada insumo) e a diferença entre os dois.</Li>
+            <Li><HL>Status das quantidades</HL> — aparece após a primeira contagem validada. Mostra quantos insumos estão abaixo do mínimo, dentro da margem mín/máx e acima do máximo.</Li>
+            <Li><HL>Status das contagens</HL> — contagens registradas no total, quantas foram validadas e quantas ainda aguardam validação.</Li>
+            <Li>O botão <HL>Gráficos</HL> alterna para três donuts: % de insumos contabilizados vs cadastrados, % do valor contabilizado vs adquirido, e % de contagens validadas vs registradas. O percentual no centro representa sempre o valor principal (contabilizado ou validado).</Li>
+            <Li>Cor dos valores: <HL color={T.red}>Vermelho</HL> = abaixo do esperado · <HL color={T.green}>Verde</HL> = igual ao esperado · <HL color={T.purple}>Roxo</HL> = acima do esperado.</Li>
           </Acc>
 
           <Acc id="insumos" title="📦 Aba Insumos" color={T.warm}>
-            <P>Ponto de partida do sistema. Aqui você cadastra cada item que compõe o estoque — toalhas, roupões, fronhas etc.</P>
-            <Li>Cadastre o <HL>nome</HL> (vai automaticamente para maiúsculas), a <HL>unidade</HL> de medida, o <HL>valor unitário</HL>, a quantidade <HL color={T.warm}>mínima</HL> e a <HL color={T.purple}>máxima</HL>. Você pode anexar uma imagem ou PDF ao insumo.</Li>
-            <Li>O <HL color={T.warm}>mínimo</HL> é o piso de alerta — abaixo dele o item aparece em vermelho nas contagens e no dashboard. O <HL color={T.purple}>máximo</HL> é o nível ideal de abastecimento e serve como meta para a programação de compras.</Li>
-            <Li>O histórico de compras de cada insumo aparece diretamente no card, agrupado em <HL color={T.warm}>Entrada inicial</HL> (primeira compra) e <HL color={T.purple}>Reposição</HL> (compras posteriores). Clique no grupo para expandir as compras individuais.</Li>
-            <Li>O campo <HL>Total adquirido</HL> soma automaticamente todas as compras registradas para aquele insumo.</Li>
-            <Tip text="⚠️ Sem mínimo e máximo definidos, o sistema não consegue gerar sugestões de compra nem alertar sobre estoque crítico." color={T.yellow}/>
+            <P>Aqui você cadastra e gerencia cada item do estoque. Use a barra de pesquisa para localizar insumos rapidamente.</P>
+            <Li>Para cada insumo informe: <HL>nome</HL> (convertido automaticamente para maiúsculas), <HL>unidade</HL> de medida, <HL>valor unitário</HL> em R$, quantidade <HL color={T.warm}>mínima</HL> e quantidade <HL color={T.purple}>máxima</HL>. É possível anexar imagem ou PDF ao insumo.</Li>
+            <Li>O <HL color={T.warm}>mínimo</HL> é o nível de alerta — abaixo dele o insumo aparece em vermelho nas contagens e no dashboard. O <HL color={T.purple}>máximo</HL> é o nível ideal de estoque e é usado como meta na programação de compras.</Li>
+            <Li>O campo <HL>Última contagem</HL> mostra a quantidade contabilizada na contagem mais recente. O campo <HL>Total adquirido</HL> soma automaticamente todas as compras já registradas.</Li>
+            <Li>O histórico de compras de cada insumo fica visível no próprio card, agrupado em <HL color={T.warm}>Entrada inicial</HL> (primeira compra do insumo) e <HL color={T.purple}>Reposição</HL> (compras seguintes). Toque no grupo para expandir e ver as compras individuais com data e quantidade.</Li>
+            <Tip text="⚠️ Sem mínimo e máximo cadastrados, o sistema não gera sugestões de compra nem emite alertas de estoque crítico no dashboard." color={T.yellow}/>
           </Acc>
 
           <Acc id="contagens" title="📋 Aba Contagens" color={T.warm}>
             <P>Dividida em três sub-abas: Histórico, Agendamentos e Evolução.</P>
-            <Li><HL>Histórico</HL> — lista todas as contagens registradas, da mais recente para a mais antiga. Clique em qualquer contagem para expandir e ver: quantidade contabilizada, valor contabilizado, total adquirido, mínimo, máximo e status de cada insumo. A mais recente recebe a tag ÚLTIMA CONTAGEM.</Li>
-            <Li><HL>Agendamentos</HL> — crie agendamentos informando nome e data. O contador só consegue acessar a contagem na data agendada ou em datas atrasadas ainda não realizadas. Ao reprovar uma contagem, um agendamento de Recontagem é criado automaticamente com prazo de 48 horas. Agendamentos concluídos somem da lista automaticamente.</Li>
-            <Li><HL>Evolução</HL> — selecione um insumo para ver o gráfico de barras comparando compras e contagens validadas ao longo do tempo. </Li>
-            <Li>Para <HL color={T.green}>validar</HL>: os valores contabilizados passam a ser o estoque oficial, o agendamento é concluído e o sistema verifica se há itens abaixo do máximo para sugerir compras. Para <HL color={T.red}>reprovar</HL>: a contagem é marcada como reprovada e um agendamento de recontagem é criado automaticamente.</Li>
-            <Tip text="💡 Apenas contagens validadas alimentam a programação de compras e a tela de evolução." color={T.accent}/>
+            <Li><HL>Histórico</HL> — lista todas as contagens, da mais recente para a mais antiga. A mais recente recebe a tag ÚLTIMA CONTAGEM. Toque em uma contagem para ver o detalhamento completo: quantidade contabilizada, valor contabilizado, total adquirido, mínimo, máximo e status de cada insumo. Os botões ✅ Validar e ✕ Reprovar aparecem para contagens ainda pendentes.</Li>
+            <Li><HL>Agendamentos</HL> — crie agendamentos com nome e data. O contador só consegue realizar a contagem na data agendada ou em datas anteriores ainda não realizadas (atrasadas). Agendamentos concluídos pelo contador somem automaticamente da lista. Ao reprovar uma contagem, um agendamento de Recontagem é criado automaticamente com prazo de 48 horas.</Li>
+            <Li><HL>Evolução</HL> — selecione <HL>TODOS</HL> para ver um resumo comparativo de todos os insumos (adquirido vs contabilizado na última contagem). Selecione um insumo específico para ver o gráfico de barras com o histórico de compras (agrupado e expansível) e as contagens validadas ao longo do tempo.</Li>
+            <Li>Ao <HL color={T.green}>validar</HL>: os valores contabilizados tornam-se o estoque oficial, o agendamento é concluído e o sistema sinaliza se há insumos abaixo do máximo para compra. Ao <HL color={T.red}>reprovar</HL>: a contagem é marcada como reprovada e um agendamento de recontagem é criado automaticamente para o mesmo dia.</Li>
+            <Tip text="💡 Apenas contagens validadas alimentam a programação de compras e o histórico de evolução." color={T.accent}/>
           </Acc>
 
           <Acc id="compras" title="🛒 Aba Compras" color={T.warm}>
-            <P>Gerencia o abastecimento em duas sub-abas: Programação e Compras Realizadas.</P>
-            <Li><HL>Programação</HL> — lista automática dos insumos que precisam ser comprados para atingir a quantidade máxima. O cálculo usa como base a última contagem validada mais as compras feitas após essa contagem. Quando todos os insumos já atingiram o máximo, a tela informa isso. Selecione os itens desejados e registre cada compra individualmente.</Li>
-            <Li>A primeira compra de um insumo é classificada como <HL color={T.warm}>Entrada inicial</HL> (laranja). As compras seguintes são classificadas como <HL color={T.purple}>Reposição</HL> (roxo). Essa classificação aparece tanto na programação quanto no histórico.</Li>
-            <Li><HL>Compras Realizadas</HL> — histórico completo de todas as compras, agrupado por insumo e depois por tipo (Entrada inicial / Reposição). Clique no grupo para ver as compras individuais com data, quantidade e nota. Selecione insumos para calcular o gasto total.</Li>
-            <Li>Ao registrar uma compra, você pode informar a <HL>data</HL>, a <HL>quantidade</HL>, uma <HL>observação</HL> e anexar a nota fiscal. Compras podem ser editadas ou excluídas posteriormente.</Li>
-            <Tip text="💡 As sugestões de compra só aparecem após a primeira contagem validada. Sem contagem validada, o sistema usa o total adquirido como base." color={T.accent}/>
+            <P>Dividida em duas sub-abas: Programação e Compras Realizadas. Use a barra de pesquisa em ambas para localizar insumos.</P>
+            <Li><HL>Programação</HL> — lista automática dos insumos que precisam ser comprados para atingir a quantidade máxima. O cálculo usa como base a última contagem validada somada às compras feitas após ela. Se não houver contagem validada, usa o total já adquirido como base. Quando todos os insumos já atingiram o máximo, a tela exibe uma mensagem informando isso.</Li>
+            <Li>Cada insumo mostra: tipo da compra (<HL color={T.warm}>Entrada inicial</HL> para a primeira compra, <HL color={T.purple}>Reposição</HL> para as demais), quantidade da última contagem ou 0 para entradas iniciais, quantidade necessária para atingir o máximo e o valor estimado. O botão Registrar compra só fica ativo quando o insumo está selecionado (checkbox).</Li>
+            <Li><HL>Compras Realizadas</HL> — histórico completo agrupado por insumo e depois por tipo (Entrada inicial / Reposição). Toque no grupo para expandir as compras individuais. Selecione insumos para calcular o gasto total selecionado.</Li>
+            <Li>Ao registrar uma compra é possível informar: data, quantidade, observação e anexar nota fiscal. Compras podem ser editadas ou excluídas a qualquer momento.</Li>
+            <Tip text="💡 A programação só é gerada a partir da primeira contagem validada. Antes disso, insumos sem nenhuma compra aparecem como Entrada inicial." color={T.accent}/>
           </Acc>
 
           <Acc id="seguranca" title="🔒 Aba Segurança" color={T.warm}>
-            <P>Configurações de acesso e comunicação do sistema.</P>
-            <Li><HL>Alterar senha:</HL> informe a senha atual e a nova senha (mínimo 4 caracteres). A senha padrão inicial é <span style={{fontFamily:T.fontMono,color:T.accent,fontSize:T.fs12}}>Teresa</span>.</Li>
-            <Li><HL>Dica de senha:</HL> texto visível na tela de login ao clicar em "Esqueci minha senha". Útil para recuperação sem precisar de suporte técnico.</Li>
-            <Li><HL>WhatsApp:</HL> número do gerente para receber os relatórios enviados pelo contador. Informe no formato DDI + DDD + número sem espaços. Exemplo: <span style={{fontFamily:T.fontMono,color:T.accent,fontSize:T.fs12}}>5586999990000</span>. Quando configurado, o botão de envio aparece na tela de conclusão da contagem e na tela bloqueada.</Li>
+            <P>Configurações de acesso e integração com WhatsApp.</P>
+            <Li><HL>Alterar senha:</HL> informe a senha atual e a nova senha (mínimo 4 caracteres). A senha padrão inicial do sistema é <span style={{fontFamily:T.fontMono,color:T.accent,fontSize:T.fs12}}>Teresa</span>. Marque "Mostrar senhas" para visualizar o que está digitando.</Li>
+            <Li><HL>Dica de senha:</HL> texto exibido na tela de login ao tocar em "Esqueci minha senha". Útil para recuperação sem precisar de suporte técnico.</Li>
+            <Li><HL>WhatsApp:</HL> número do gerente que recebe os relatórios enviados pelo contador. Informe no formato DDI + DDD + número, sem espaços ou símbolos. Exemplo: <span style={{fontFamily:T.fontMono,color:T.accent,fontSize:T.fs12}}>5586999990000</span> (55 = Brasil, 86 = DDD, restante = número). Quando configurado, o botão de envio via WhatsApp aparece na tela de conclusão da contagem e na tela bloqueada.</Li>
           </Acc>
         </div>
       )}
 
       {sub==="contador"&&(
         <div>
-          <Acc id="acesso" title="Como acessar?" color={T.accent}>
-            <P>O contador acessa o sistema pela tela inicial sem necessidade de senha, tocando em Área do Contador.</P>
-            <Li>O acesso à contagem é liberado automaticamente apenas nas <HL>datas agendadas</HL> pelo gerente ou em datas que já passaram sem realização (contagens atrasadas).</Li>
-            <Li>Se não houver contagem agendada para hoje, a tela ficará <HL color={T.red}>bloqueada</HL> e mostrará a próxima contagem agendada. Use o botão de WhatsApp nessa tela para avisar o gerente diretamente com a mensagem já preenchida.</Li>
-            <Tip text="📲 O botão de WhatsApp na tela bloqueada abre o aplicativo com a mensagem já redigida explicando a situação ao gerente." color={T.green}/>
+          <Acc id="acesso" title="Como acessar o sistema?" color={T.accent}>
+            <P>O contador acessa pela tela inicial tocando em Área do Contador — sem necessidade de senha.</P>
+            <Li>O acesso à contagem é liberado automaticamente apenas nas <HL>datas agendadas</HL> pelo gerente. Se a data já passou e a contagem ainda não foi feita, ela também fica disponível (aparece como atrasada).</Li>
+            <Li>Se não houver contagem agendada para hoje, a tela ficará <HL color={T.red}>bloqueada</HL>. A tela exibirá a próxima data agendada e um botão para avisar o gerente diretamente pelo WhatsApp com a mensagem já preenchida explicando a situação.</Li>
+            <Tip text="📲 O botão de WhatsApp na tela bloqueada só aparece se o número do gerente estiver configurado na Aba Segurança." color={T.green}/>
           </Acc>
 
           <Acc id="contar" title="Como realizar a contagem?" color={T.accent}>
-            <P>A contagem é feita insumo por insumo. Nenhuma quantidade de referência é exibida para garantir a independência da contagem.</P>
-            <Li><HL>1. Inicie</HL> — toque em Iniciar. O nome e a unidade do primeiro insumo aparecem na tela.</Li>
-            <Li><HL>2. Conte</HL> — vá fisicamente até o local e conte a quantidade presente. Não estime.</Li>
-            <Li><HL>3. Registre</HL> — use o teclado numérico para digitar a quantidade e toque em ✓ para confirmar.</Li>
-            <Li><HL>4. Corrija se necessário</HL> — toque em Editar para alterar um valor já confirmado. Use as miniaturas no rodapé para navegar entre os insumos.</Li>
-            <Li><HL>5. Envie</HL> — ao confirmar todos os itens, toque em Enviar. A contagem é salva e o botão de WhatsApp aparece para encaminhar o relatório ao gerente.</Li>
-            <Tip text="⚠️ A contagem só é salva no sistema após tocar em Enviar. Não feche o aplicativo antes de concluir esse passo." color={T.red}/>
+            <P>A contagem é feita insumo por insumo. Nenhuma quantidade de referência é exibida na tela — isso garante que a contagem seja independente e precisa.</P>
+            <Li><HL>1. Inicie</HL> — toque em Iniciar na tela de instruções. O nome e a unidade do primeiro insumo aparecem na tela.</Li>
+            <Li><HL>2. Conte fisicamente</HL> — vá até o local, conte a quantidade presente e não estime.</Li>
+            <Li><HL>3. Registre</HL> — use o teclado numérico para digitar a quantidade e toque em ✓ para confirmar o insumo.</Li>
+            <Li><HL>4. Navegue</HL> — use as miniaturas no rodapé para ir a qualquer insumo já visitado. Toque em Editar para corrigir um valor já confirmado.</Li>
+            <Li><HL>5. Envie</HL> — após confirmar todos os insumos, toque em Enviar. A contagem é salva no sistema e o botão para enviar o relatório ao gerente via WhatsApp aparece na tela.</Li>
+            <Tip text="⚠️ A contagem só é registrada no sistema após tocar em Enviar. Não feche o aplicativo antes de concluir esse passo." color={T.red}/>
           </Acc>
 
           <Acc id="aposenvio" title="O que acontece após o envio?" color={T.accent}>
-            <P>Após o envio, a contagem fica com status <HL color={T.yellow}>Pendente</HL> no histórico até que o gerente a analise.</P>
-            <Li>Se o gerente <HL color={T.green}>validar</HL>, os valores contabilizados passam a ser o estoque oficial, o agendamento é marcado como concluído e o sistema verifica automaticamente a necessidade de compras.</Li>
-            <Li>Se o gerente <HL color={T.red}>reprovar</HL>, um novo agendamento de <HL>Recontagem</HL> é criado automaticamente para o mesmo dia com prazo de 48 horas. A recontagem funciona exatamente como uma contagem normal.</Li>
-            <Li>O contador receberá orientações do gerente via WhatsApp caso a contagem seja reprovada ou necessite correção.</Li>
+            <P>Após o envio, a contagem aparece no histórico com o status <HL color={T.yellow}>Pendente</HL> até que o gerente a analise.</P>
+            <Li>Se o gerente <HL color={T.green}>validar</HL>: os valores contabilizados tornam-se o estoque oficial do sistema, o agendamento é marcado como concluído e o sistema verifica automaticamente se há necessidade de compras.</Li>
+            <Li>Se o gerente <HL color={T.red}>reprovar</HL>: um novo agendamento de <HL>Recontagem</HL> é criado automaticamente para o mesmo dia, com prazo de 48 horas para realização. A recontagem funciona exatamente como uma contagem normal — aparecerá disponível na data agendada.</Li>
+            <Li>O gerente pode enviar orientações via WhatsApp caso a contagem seja reprovada ou necessite de ajustes.</Li>
           </Acc>
         </div>
       )}
