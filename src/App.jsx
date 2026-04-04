@@ -52,6 +52,9 @@ const T = {
 const daysUntil = s => { const n=new Date();n.setHours(0,0,0,0);const d=new Date(s+"T00:00:00");d.setHours(0,0,0,0);return Math.round((d-n)/86400000); };
 const fmtDate = s => { if(!s)return"—";const[y,m,d]=s.split("-");return`${d}/${m}/${y}`; };
 const todayStr = () => { const d=new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
+const nowISO = () => new Date().toISOString(); // full datetime for countings/purchases
+// Compare datetime strings: works for both "2026-04-04" and "2026-04-04T12:00:00Z"
+const dateOf = s => s ? s.slice(0,10) : ""; // extract YYYY-MM-DD from any format
 const normPhone = v => String(v||"").replace(/\D/g,"");
 const fmtCur = v => Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const upper = s => s.toUpperCase();
@@ -412,7 +415,7 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
   const numpad=k=>{if(isConf)return;if(k==="⌫")setInputVal(p=>p.slice(0,-1));else if(k==="✓")doConfirm();else setInputVal(p=>(p===""||p==="0")?String(k):p.length>6?p:p+String(k));};
   const doSend=()=>{
     const result=items.map(i=>({...i,counted:counts[i.id]??0,validated:false}));
-    const counting={id:Date.now(),label,date:countDate,items:result,validated:false};
+    const counting={id:Date.now(),label,date:countDate,datetime:nowISO(),items:result,validated:false};
     onSubmit(counting,nextSched);
     setSavedCounting(counting);
     setPhase("done");
@@ -547,7 +550,11 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
             <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
               {!isConf&&<button onClick={doConfirm} disabled={inputVal===""} style={{...S.btn(inputVal!==""?T.green:T.textMuted,true),padding:"13px",fontSize:T.fs14,opacity:inputVal!==""?1:.45}}>✓ Confirmar</button>}
               {isConf&&current<total-1&&<button onClick={doNext} style={{...S.btn(T.accent,true),padding:"13px",fontSize:T.fs14}}>Próximo → ({current+2}/{total})</button>}
-              {allDone&&<button onClick={doSend} style={{...S.btn(T.green,true),padding:"13px",fontSize:T.fs14}}>Finalizar contagem</button>}
+              {allDone&&(
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <button onClick={doSend} style={{...S.btn(T.green,true),padding:"13px",fontSize:T.fs14}}>Finalizar contagem</button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -563,26 +570,26 @@ function CounterView({items,countings,scheduledDates,onSubmit,onBack,whatsapp}) 
   return (
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:0,fontFamily:T.fontBase,padding:24}}>
       <div style={{width:72,height:72,background:`linear-gradient(135deg,${T.green},${T.greenDim})`,borderRadius:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:34,marginBottom:16}}>✅</div>
-      <div style={{fontFamily:T.fontMono,fontSize:T.fs20,color:T.green,textAlign:"center",marginBottom:6}}>CONTAGEM ENVIADA!</div>
-      <div style={{fontSize:T.fs13,color:T.textMuted,textAlign:"center",marginBottom:8}}>Dados salvos com sucesso</div>
-      <div style={{fontSize:T.fs12,color:T.yellow,textAlign:"center",marginBottom:24}}>⏳ Aguardando validação do gerente</div>
-      <div style={{...S.card({maxWidth:340,width:"100%",marginBottom:16})}}>
-        <div style={{fontSize:T.fs13,color:T.text,lineHeight:2.2}}>
-          <div>💾 <span style={{color:T.green,fontWeight:600}}>Contagem salva</span> no histórico</div>
-          <div>⏳ <span style={{color:T.yellow,fontWeight:600}}>Aguardando validação</span> do gerente</div>
-        </div>
+      <div style={{fontFamily:T.fontMono,fontSize:T.fs20,color:T.green,textAlign:"center",marginBottom:6}}>CONTAGEM FINALIZADA!</div>
+      <div style={{fontSize:T.fs13,color:T.textMuted,textAlign:"center",marginBottom:24}}>Contagem salva. Agora envie o relatório para Teresa.</div>
+      <div style={{width:"100%",maxWidth:340,display:"flex",flexDirection:"column",gap:12}}>
+        {whatsapp&&savedCounting?(
+          <a
+            href={`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(buildWAMsg(savedCounting,items))}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{display:"block",width:"100%",background:T.green,color:"#fff",fontWeight:700,fontSize:T.fs14,padding:"14px",borderRadius:10,textAlign:"center",textDecoration:"none",boxSizing:"border-box",fontFamily:T.fontBase}}
+          >
+            Enviar relatório para Teresa
+          </a>
+        ):(
+          <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:"14px",textAlign:"center"}}>
+            <div style={{fontSize:T.fs13,color:T.textMuted,marginBottom:4}}>Enviar relatório para Teresa</div>
+            <div style={{fontSize:T.fs11,color:T.textMuted}}>Configure o WhatsApp na Aba Segurança para habilitar este botão.</div>
+          </div>
+        )}
+        <button onClick={onBack} style={{...S.btn(T.surface,true),border:`1px solid ${T.border}`,color:T.textSub}}>← Voltar ao início</button>
       </div>
-      {whatsapp&&savedCounting&&(
-        <a
-          href={`https://wa.me/${normPhone(whatsapp)}?text=${encodeURIComponent(buildWAMsg(savedCounting,items))}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{display:"block",width:"100%",maxWidth:340,background:T.accent,color:"#fff",fontWeight:700,fontSize:T.fs14,padding:"13px",borderRadius:10,border:"none",textAlign:"center",textDecoration:"none",marginBottom:12,boxSizing:"border-box",fontFamily:T.fontBase}}
-        >
-          Enviar relatório para Teresa
-        </a>
-      )}
-      <button onClick={onBack} style={{...S.btn(T.surface,true),border:`1px solid ${T.border}`,color:T.textSub,maxWidth:340}}>← Início</button>
     </div>
   );
 }
@@ -645,7 +652,11 @@ function DashTab({items,countings,scheduledDates,purchases,onNavigate}) {
   const dashLc={};if(dashLastC)(dashLastC.items||[]).forEach(ci=>{dashLc[ci.id]=ci.counted;});
   const getPostBoughtDash=(itemId)=>{
     if(!dashLastC) return (purchases||[]).filter(p=>p.itemId===itemId).reduce((s,p)=>s+Number(p.qty||0),0);
-    return (purchases||[]).filter(p=>p.itemId===itemId&&(p.date||"")>=dashLastC.date).reduce((s,p)=>s+Number(p.qty||0),0);
+    const cutoff = dashLastC.datetime || (dashLastC.date+"T23:59:59Z");
+    return (purchases||[]).filter(p=>{
+      const pdt = p.datetime || (p.date+"T00:00:00Z");
+      return p.itemId===itemId && pdt > cutoff;
+    }).reduce((s,p)=>s+Number(p.qty||0),0);
   };
   const getTotalBoughtDash=(itemId)=>(purchases||[]).filter(p=>p.itemId===itemId).reduce((s,p)=>s+Number(p.qty||0),0);
   const needItems=items.filter(i=>{
@@ -1419,7 +1430,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
   const [subTab,setSubTab]=useState(initialSubTab);
   const [progSearch,setProgSearch]=useState("");
   const [histSearch,setHistSearch]=useState("");
-  const lastC=countings.filter(c=>c.validated).length?[...countings].filter(c=>c.validated).sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0]:null;
+  const lastC=countings.filter(c=>c.validated&&!c.rejected).length?[...countings].filter(c=>c.validated&&!c.rejected).sort((a,b)=>Number(b.id||0)-Number(a.id||0))[0]:null;
   const lc={};if(lastC)(lastC.items||[]).forEach(ci=>{lc[ci.id]=ci.counted;});
 
   // Purchase suggestion: based on counted qty from last validated counting
@@ -1428,9 +1439,14 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
   const getPurchasedQty = (itemId) => (purchases||[]).filter(p=>p.itemId===itemId).reduce((s,p)=>s+Number(p.qty||0),0);
 
   const getPostCountingPurchases=(itemId)=>{
-    // For reposition: only count purchases made after last validated counting date
+    // Count purchases made AFTER the last validated counting
+    // Use datetime if available for precision, otherwise fallback to date-only (day after)
     if(!lastC) return getPurchasedQty(itemId);
-    return (purchases||[]).filter(p=>p.itemId===itemId&&(p.date||"")>=lastC.date).reduce((s,p)=>s+Number(p.qty||0),0);
+    const cutoff = lastC.datetime || (lastC.date+"T23:59:59Z"); // end of counting day
+    return (purchases||[]).filter(p=>{
+      const pdt = p.datetime || (p.date+"T00:00:00Z");
+      return p.itemId===itemId && pdt > cutoff;
+    }).reduce((s,p)=>s+Number(p.qty||0),0);
   };
   const allSug=items.filter(i=>{
     const alreadyBought=getPurchasedQty(i.id);
@@ -1494,7 +1510,7 @@ function BuyTab({items,setItems,countings,purchases,setPurchases,initialSubTab="
       const currentItem=items.find(i=>i.id===buyModal.id);
       const isFirstPurchase=!(currentItem?.purchases||[]).length&&!(purchases||[]).filter(p=>p.itemId===buyModal.id).length;
       const pType=isFirstPurchase?"initial":"reposition";
-      const purchase={id:Date.now(),itemId:buyModal.id,itemName:buyModal.name,itemValue:uv,unitValue:uv,qty,date:buyDate,note:buyNote,attachment:buyAttach,attachmentName:buyAttachName,pType};
+      const purchase={id:Date.now(),itemId:buyModal.id,itemName:buyModal.name,itemValue:uv,unitValue:uv,qty,date:buyDate,datetime:nowISO(),note:buyNote,attachment:buyAttach,attachmentName:buyAttachName,pType};
       setPurchases(prev=>[...(prev||[]),purchase]);
       setItems(prev=>prev.map(it=>{
         if(it.id!==buyModal.id) return it;
